@@ -22,7 +22,7 @@ namespace ycetl {
 namespace trace {
 
 
-template <typename T>
+template <typename T, typename GrowthHandler = void>
 class object_pool {
   T** _pool_vector = nullptr; // the dynamically array of array of slots (pool vector)
   T* _current_pool = nullptr;
@@ -69,6 +69,10 @@ public:
     _pool_vector = new_pool_vector; // assign the new pool vector
     _pool_vector_size = new_pool_vector_size; // update the size of the pool vector
     _current_pool = nullptr; // reset the current pool
+    // notify the growth handler if it exists
+    if constexpr (!std::is_void_v<GrowthHandler>)
+        GrowthHandler::vector_grew(static_cast<GrowthHandler*>(this),
+                                   _pool_vector_size);    //
   }
 
   // enforces that there is a pool available, as we do lazy allocation
@@ -81,6 +85,11 @@ public:
     _pool_vector[_pools_allocated] = _current_pool; // add the new pool to the pool vector
     _pools_allocated++; // increment the number of pools allocated
     _slots_taken = 0; // reset the slots taken in the current pool
+    //
+    if constexpr (!std::is_void_v<GrowthHandler>)
+        GrowthHandler::pool_grew(static_cast<GrowthHandler*>(this),
+                                 _pools_allocated - 1);    //
+    //
   }
 
   // enforces that there is a slot available in the pool, as we do lazy allocation
@@ -109,6 +118,81 @@ public:
     }
   }
 };
+
+
+template<typename T>
+class sparse_object_pool : public object_pool<T> {
+    using base = object_pool<T>;
+
+    std::uint8_t** _gap_vector = nullptr;      // bitmap array mirrors _pool_vector
+
+    /* grow _gap_vector when base grows ----------------------------------- */
+    constexpr void grow_gap_vector()
+    {
+        std::size_t new_sz = this->_pool_vector_size;           // same size
+        auto gv = new std::uint8_t*[new_sz]();                  // zero-init
+        for (std::size_t i = 0; i < this->_pools_allocated; ++i)
+            gv[i] = _gap_vector ? _gap_vector[i] : nullptr;
+        delete[] _gap_vector;
+        _gap_vector = gv;
+    }
+
+    /* ensure bitmap for current pool exists ------------------------------ */
+    constexpr void ensure_gap_pool()
+    {
+        if (this->_pools_allocated > this->_pool_vector_size) grow_gap_vector();
+        if (!_gap_vector[this->_pools_allocated-1])
+            _gap_vector[this->_pools_allocated-1] =
+                new std::uint8_t[this->_pool_size]{};           // zero-filled
+    }
+
+public:
+    constexpr sparse_object_pool() = default;
+
+    /* add object and mark gap-bitmap -------------------------------------- */
+    constexpr std::size_t add(const T& t)
+    {
+        std::size_t idx = base::add(t);         // use base allocator
+        ensure_gap_pool();
+        std::size_t off  = this->_slots_taken - 1;              // 0-based slot
+        _gap_vector[this->_pools_allocated-1][off] = 1;         // mark used
+        return idx;
+    }
+
+    /* read-only iterator that skips zero bytes --------------------------- */
+    class const_iterator {
+        const sparse_object_pool* sp_;
+        std::size_t pool_ = 0, off_ = 0;
+
+        void skip() {
+            while (pool_ < sp_->_pools_allocated) {
+                auto* bm = sp_->_gap_vector[pool_];
+                while (off_ < sp_->_pool_size && bm && bm[off_] == 0) ++off_;
+                if (off_ < sp_->_pool_size) return;
+                ++pool_; off_ = 0;
+            }
+        }
+        const T* ptr() const { return sp_->_pool_vector[pool_] + off_; }
+
+    public:
+        explicit constexpr const_iterator(const sparse_object_pool* p,
+                                          std::size_t po = 0, std::size_t of = 0)
+            : sp_(p), pool_(po), off_(of) { skip(); }
+
+        constexpr const T& operator*()  const { return *ptr(); }
+        constexpr const T* operator->() const { return  ptr(); }
+        constexpr const_iterator& operator++() { ++off_; skip(); return *this; }
+        friend constexpr bool operator==(const_iterator it, std::default_sentinel_t)
+        { return it.pool_ >= it.sp_->_pools_allocated; }
+        friend constexpr bool operator!=(const_iterator it, std::default_sentinel_t s)
+        { return !(it == s); }
+    };
+
+    constexpr const_iterator begin() const { return const_iterator{this}; }
+    constexpr std::default_sentinel_t end() const { return {}; }
+};
+
+
 
 template <typename T> constexpr std::size_t safe_sizeof() {
   if constexpr (std::is_empty_v<T>) {
