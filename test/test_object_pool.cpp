@@ -2,7 +2,7 @@
 
 
 constexpr void test_object_pool() {
-  ycetl::trace::object_pool<int> pool;
+  ycetl::trace::dynamic_object_pool<int> pool;
 
 
 }

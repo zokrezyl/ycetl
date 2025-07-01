@@ -62,19 +62,19 @@ constexpr const int* build_pool(object_pool<int>& pool)
 suite object_pool_suite = [] {
 
   "empty_pool"_test = [] {
-    constexpr object_pool<int> p;
+    constexpr object_pool<int> p(1000);
     expect(pool_test_tag::global_slots(p) == 0_u);   // runtime check OK
   };
 
   "constexpr_build"_test = [] {
-    object_pool<int> p;
+    object_pool<int> p(1000);
     build_pool<15>(p);
     expect(pool_test_tag::global_slots(p) == 15_u);  // runtime check
   };
 
 
     "allocate_single_block"_test = [] {
-        object_pool<int> p;
+        object_pool<int> p(1000);
         expect(0_u == pool_test_tag::global_slots(p));
 
         p.add(42);
