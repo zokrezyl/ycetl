@@ -24,6 +24,9 @@ namespace trace {
 
 template <typename T, typename GrowthHandler = void>
 class object_pool {
+
+  friend struct pool_test_tag; // for testing purposes
+
   T** _pool_vector = nullptr; // the dynamically array of array of slots (pool vector)
   T* _current_pool = nullptr;
   std::size_t _pool_vector_growth = 0; // how many pools to grow at once
