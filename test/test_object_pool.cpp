@@ -1,11 +1,11 @@
 // test_object_pool.cpp
 #include <iostream>          // guard iostreams
 #include <boost/ut.hpp>
-#include <ycetl/trace.hpp>   // defines object_pool / dynamic_object_pool
+#include <ycetl/object_pool.hpp>   // defines object_pool / dynamic_object_pool
 
 using namespace boost::ut;
-using ycetl::trace::object_pool;
-using ycetl::trace::dynamic_object_pool;
+using ycetl::object_pool;
+using ycetl::dynamic_object_pool;
 
 /*──────────────────────── object_pool tests ─────────────────────*/
 suite object_pool_suite = [] {
