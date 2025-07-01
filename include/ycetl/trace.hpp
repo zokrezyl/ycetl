@@ -58,7 +58,7 @@ public:
       return; // pool vector is already allocated
     }
     std::size_t new_pool_vector_size = _pool_vector_size + _pool_vector_growth;
-    T** new_pool_vector = new T*[new_pool_vector_size ];
+    T** new_pool_vector = new T*[new_pool_vector_size ]();
     if (!new_pool_vector) {
       throw std::runtime_error("Failed to allocate memory for new pool array");
       return; // TODO: throw exception

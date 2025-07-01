@@ -2,6 +2,8 @@
 //
 // compile with:  g++ -std=c++23 -I/path/to/boost ut test_object_pool.cpp
 // or (MSVC)     cl /std:c++23 /I path\to\boost ut test_object_pool.cpp
+//
+// clang-format: on
 
 #include <boost/ut.hpp>
 #include <ycetl/trace.hpp>   // your header
@@ -98,7 +100,27 @@ suite object_pool_suite = [] {
         build_pool<15>(p);
         expect(pool_test_tag::global_slots(p) == 15_u);
     };
- 
+    /* push 100 objects, verify counters and last value */
+    "fill_100"_test = [] {
+        object_pool<int> p;
+        for (int i = 0; i < 100; ++i) p.add(i);
+
+        expect(pool_test_tag::global_slots(p) == 100_u);
+        expect(pool_test_tag::elem(p, 0, 99) == 99_i);   // last in first pool
+    };
+
+    /* push 10 000 objects, check total and very last slot */
+    "fill_10000"_test = [] {
+        object_pool<int> p;
+        for (int i = 0; i < 10'000; ++i) p.add(i);
+
+        expect(pool_test_tag::global_slots(p) == 10'000_u);
+
+        const std::size_t ps  = pool_test_tag::pool_size(p);
+        const std::size_t blk = 9'999 / ps;
+        const std::size_t off = 9'999 % ps;
+        expect(pool_test_tag::elem(p, blk, off) == 9'999_i);  // verify last element
+    };
 
 };
 
