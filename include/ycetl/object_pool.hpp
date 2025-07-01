@@ -5,8 +5,9 @@
 #include <new>
 
 namespace ycetl {
+
 /*───────────────────────────────────────────────────────────
-  1.  Single data-pool — lazy allocate on first add()
+  1.  Single data pool (lazy allocation on first add)
 ───────────────────────────────────────────────────────────*/
 template <typename T> class object_pool {
   T *_data = nullptr;
@@ -24,11 +25,12 @@ public:
 
   constexpr std::size_t add(const T &v) {
     if (_data == nullptr)
-      _data = new T[_capacity]; // lazy
+      _data = new T[_capacity];
     _data[_used] = v;
-    return _used++; // old index
+    return _used++;
   }
 
+  /* raw access */
   [[nodiscard]] constexpr T *data() noexcept { return _data; }
   [[nodiscard]] constexpr const T *data() const noexcept { return _data; }
 };
@@ -41,9 +43,9 @@ template <typename T> class object_pool_vector {
   std::size_t _growth = 8;
   std::size_t _pool_size = 10;
   std::size_t _capacity = 0;    // pointer slots
-  std::size_t _pools_taken = 0; // pools in use
+  std::size_t _pools_taken = 0; // valid pools
 
-  constexpr void grow_vector() {
+  constexpr void grow() {
     std::size_t new_cap = (_capacity ? _capacity : 0) + _growth;
     auto **nv = new object_pool<T> *[new_cap]();
     for (std::size_t i = 0; i < _pools_taken; ++i)
@@ -57,7 +59,6 @@ public:
   constexpr object_pool_vector(std::size_t pool_size = 10,
                                std::size_t growth = 8)
       : _growth(growth), _pool_size(pool_size) {}
-
   constexpr ~object_pool_vector() {
     for (std::size_t i = 0; i < _pools_taken; ++i)
       delete _vector[i];
@@ -66,13 +67,13 @@ public:
 
   constexpr object_pool<T> *get_new_pool() {
     if (_pools_taken == _capacity)
-      grow_vector();
+      grow();
     auto *p = new object_pool<T>(_pool_size);
     _vector[_pools_taken++] = p;
     return p;
   }
 
-  /* tiny getters for derived access */
+  /* tiny getters for read-only access */
   constexpr std::size_t pool_size() const noexcept { return _pool_size; }
   constexpr std::size_t pools_taken() const noexcept { return _pools_taken; }
   constexpr object_pool<T> *const *data() const noexcept { return _vector; }
@@ -83,6 +84,7 @@ public:
 ───────────────────────────────────────────────────────────*/
 template <typename T> class dynamic_object_pool {
 protected:
+  /* protected accessor for subclasses */
   constexpr object_pool_vector<T> *vec() noexcept { return _pool_vector; }
   constexpr object_pool_vector<T> const *vec() const noexcept {
     return _pool_vector;
@@ -106,47 +108,49 @@ public:
 };
 
 /*───────────────────────────────────────────────────────────
-  4.  Sparse pool with gap bitmap
+  4.  Sparse pool (bitmap of gaps)
 ───────────────────────────────────────────────────────────*/
 template <typename T> class sparse_object_pool : public dynamic_object_pool<T> {
   using base = dynamic_object_pool<T>;
 
-  std::uint8_t **_bitmap_vec = nullptr;
-  std::size_t _bitmap_cap = 0;
-  std::size_t _bitmaps = 0;
+  std::uint8_t **_bitmaps = nullptr; // pointer array of bitmaps
+  std::size_t _bmp_cap = 0;          // bitmap slots allocated
+  std::size_t _bmp_taken = 0;        // bitmaps in use
 
-  void sync_bitmaps() {
+  /* ensure we have a bitmap for each data pool */
+  void sync() {
     std::size_t pools = base::vec() ? base::vec()->pools_taken() : 0;
-    if (pools <= _bitmaps)
+    if (pools <= _bmp_taken)
       return;
 
-    if (pools > _bitmap_cap) {
+    if (pools > _bmp_cap) {
       std::size_t new_cap = pools + 8;
       auto **nv = new std::uint8_t *[new_cap]();
-      for (std::size_t i = 0; i < _bitmaps; ++i)
-        nv[i] = _bitmap_vec[i];
-      delete[] _bitmap_vec;
-      _bitmap_vec = nv;
-      _bitmap_cap = new_cap;
+      for (std::size_t i = 0; i < _bmp_taken; ++i)
+        nv[i] = _bitmaps[i];
+      delete[] _bitmaps;
+      _bitmaps = nv;
+      _bmp_cap = new_cap;
     }
-    for (std::size_t i = _bitmaps; i < pools; ++i)
-      _bitmap_vec[i] = new std::uint8_t[base::vec()->pool_size()]{};
-    _bitmaps = pools;
+    auto ps = base::vec()->pool_size();
+    for (std::size_t i = _bmp_taken; i < pools; ++i)
+      _bitmaps[i] = new std::uint8_t[ps](); // zero-init
+    _bmp_taken = pools;
   }
 
 public:
   constexpr sparse_object_pool() = default;
   ~sparse_object_pool() {
-    for (std::size_t i = 0; i < _bitmaps; ++i)
-      delete[] _bitmap_vec[i];
-    delete[] _bitmap_vec;
+    for (std::size_t i = 0; i < _bmp_taken; ++i)
+      delete[] _bitmaps[i];
+    delete[] _bitmaps;
   }
 
   std::size_t add(const T &v) {
-    std::size_t idx = base::add(v); // allocates lazily
-    sync_bitmaps();
+    std::size_t idx = base::add(v); // may allocate pools
+    sync();
     std::size_t ps = base::vec()->pool_size();
-    _bitmap_vec[idx / ps][idx % ps] = 1u;
+    _bitmaps[idx / ps][idx % ps] = 1;
     return idx;
   }
 
@@ -156,8 +160,8 @@ public:
     std::size_t blk_{0}, off_{0};
 
     void skip() {
-      while (blk_ < sp_->_bitmaps) {
-        auto *bm = sp_->_bitmap_vec[blk_];
+      while (blk_ < sp_->_bmp_taken) {
+        auto *bm = sp_->_bitmaps[blk_];
         auto ps = sp_->base::vec()->pool_size();
         while (off_ < ps && bm[off_] == 0)
           ++off_;
@@ -173,8 +177,8 @@ public:
 
   public:
     using iterator_category = std::input_iterator_tag;
-    using difference_type = std::ptrdiff_t;
     using value_type = T;
+    using difference_type = std::ptrdiff_t;
     using pointer = const T *;
     using reference = const T &;
 
@@ -184,15 +188,25 @@ public:
       skip();
     }
 
+    const_iterator();
+
     reference operator*() const { return *ptr(); }
     pointer operator->() const { return ptr(); }
+
     const_iterator &operator++() {
       ++off_;
       skip();
       return *this;
     }
+
+    const_iterator operator++(int) {
+      auto tmp = *this;
+      ++(*this);
+      return tmp;
+    }
+
     friend bool operator==(const const_iterator &it, std::default_sentinel_t) {
-      return it.blk_ >= it.sp_->_bitmaps;
+      return it.blk_ >= it.sp_->_bmp_taken;
     }
     friend bool operator!=(const const_iterator &it,
                            std::default_sentinel_t s) {
@@ -200,7 +214,7 @@ public:
     }
   };
 
-  const_iterator begin() const { return const_iterator{this}; }
+  const_iterator begin() const { return const_iterator(this); }
   std::default_sentinel_t end() const { return {}; }
 };
 
