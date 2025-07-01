@@ -159,6 +159,9 @@ public:
       delete _vector[i];
     delete[] _vector;
   }
+  constexpr std::size_t pool_size() const noexcept { return _pool_size; }
+  constexpr std::size_t pools_taken() const noexcept { return _pools_taken; }
+  constexpr object_pool<T> **data() const noexcept { return _vector; }
 
   /* lazily creates a new data-pool and returns its pointer */
   [[nodiscard]] constexpr object_pool<T> *get_new_pool() {
@@ -174,6 +177,12 @@ template <typename T> class dynamic_object_pool {
   object_pool<T> *_current_pool;
   object_pool_vector<T> *_pool_vector;
   std::size_t _total_number_of_slots_taken = 0;
+
+protected: // so sparse_object_pool can see it
+  constexpr object_pool_vector<T> *vec() noexcept { return _pool_vector; }
+  constexpr const object_pool_vector<T> *vec() const noexcept {
+    return _pool_vector;
+  }
 
 public:
   dynamic_object_pool()
@@ -281,6 +290,114 @@ public:
 };
 
 #endif
+
+/* ------------------------------------------------------------------
+   sparse_object_pool<T>
+   – was: public object_pool<T>
+   – now: public dynamic_object_pool<T>
+------------------------------------------------------------------- */
+template <typename T> class sparse_object_pool : public dynamic_object_pool<T> {
+  using base = dynamic_object_pool<T>; // new base alias
+
+  /* bitmap vector in lock-step with the pool vector */
+  std::uint8_t **_gap_vector = nullptr; // one byte per slot
+  std::size_t _gap_vec_cap = 0;         // pointer capacity
+  std::size_t _pools_mapped = 0;        // bitmaps allocated
+
+  /* ensure bitmap side grows when a new data pool appears */
+  void sync_with_base() {
+    /* number of data pools currently live in the base */
+    std::size_t pools =
+        base::_pool_vector ? base::_pool_vector->_pools_taken : 0;
+
+    if (pools > _pools_mapped) {
+      /* grow bitmap pointer array if needed */
+      if (pools > _gap_vec_cap) {
+        std::size_t new_cap = pools + 8;
+        auto **nv = new std::uint8_t *[new_cap]();
+        for (std::size_t i = 0; i < _pools_mapped; ++i)
+          nv[i] = _gap_vector[i];
+        delete[] _gap_vector;
+        _gap_vector = nv;
+        _gap_vec_cap = new_cap;
+      }
+      /* allocate bitmaps for the newly added pools */
+      for (std::size_t i = _pools_mapped; i < pools; ++i) {
+        _gap_vector[i] = new std::uint8_t[base::_pool_vector->_pool_size]{};
+      }
+      _pools_mapped = pools;
+    }
+  }
+
+public:
+  constexpr sparse_object_pool() = default;
+  ~sparse_object_pool() {
+    for (std::size_t i = 0; i < _pools_mapped; ++i)
+      delete[] _gap_vector[i];
+    delete[] _gap_vector;
+  }
+
+  /* override add(): mark the gap bitmap, then delegate to base */
+  std::size_t add(const T &value) {
+    /* feed base first (this allocates pools lazily) */
+    std::size_t global_idx = base::add(value);
+
+    /* ensure bitmaps exist for every data pool */
+    sync_with_base();
+
+    /* mark the slot “used” */
+    std::size_t ps = base::_pool_vector->_pool_size;
+    std::size_t blk = global_idx / ps;
+    std::size_t off = global_idx % ps;
+    _gap_vector[blk][off] = 1;
+
+    return global_idx;
+  }
+
+  /* simple forward iterator that skips zero bits */
+  class const_iterator {
+    const sparse_object_pool *sp_;
+    std::size_t blk_{0}, off_{0};
+
+    void skip() {
+      while (blk_ < sp_->_pools_mapped) {
+        auto *bm = sp_->_gap_vector[blk_];
+        auto ps = sp_->base::_pool_vector->_pool_size;
+        while (off_ < ps && bm[off_] == 0)
+          ++off_;
+        if (off_ < ps)
+          return;
+        ++blk_, off_ = 0;
+      }
+    }
+    const T *ptr() const {
+      return sp_->base::_pool_vector->_vector[blk_] + off_;
+    }
+
+  public:
+    explicit const_iterator(const sparse_object_pool *p, std::size_t b = 0,
+                            std::size_t o = 0)
+        : sp_(p), blk_(b), off_(o) {
+      skip();
+    }
+
+    const T &operator*() const { return *ptr(); }
+    const_iterator &operator++() {
+      ++off_;
+      skip();
+      return *this;
+    }
+    friend bool operator==(const_iterator it, std::default_sentinel_t) {
+      return it.blk_ >= it.sp_->_pools_mapped;
+    }
+    friend bool operator!=(const_iterator it, std::default_sentinel_t s) {
+      return !(it == s);
+    }
+  };
+
+  const_iterator begin() const { return const_iterator{this}; }
+  std::default_sentinel_t end() const { return {}; }
+};
 
 template <typename T> constexpr std::size_t safe_sizeof() {
   if constexpr (std::is_empty_v<T>) {
