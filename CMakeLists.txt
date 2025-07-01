@@ -11,6 +11,7 @@ include(cmake/CPM.cmake)
 CPMAddPackage("gh:zokrezyl/ytrace-private#main")
 CPMAddPackage("gh:yosh-matsuda/field-reflection@0.2.1")
 
+#CPMAddPackage("gh:fmtlib/fmt#11.2.0") # is added by spdlog
 
 add_library(yconstexpr INTERFACE)
 
