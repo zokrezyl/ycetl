@@ -59,10 +59,17 @@ constexpr const int* build_pool(object_pool<int>& pool)
 
 suite object_pool_suite = [] {
 
-    "empty_pool"_test = [] {
-        constexpr object_pool<int> p;
-        static_assert(pool_test_tag::global_slots(p) == 0u);
-    };
+  "empty_pool"_test = [] {
+    constexpr object_pool<int> p;
+    expect(pool_test_tag::global_slots(p) == 0_u);   // runtime check OK
+  };
+
+  "constexpr_build"_test = [] {
+    object_pool<int> p;
+    build_pool<15>(p);
+    expect(pool_test_tag::global_slots(p) == 15_u);  // runtime check
+  };
+
 
     "allocate_single_block"_test = [] {
         object_pool<int> p;
@@ -75,7 +82,7 @@ suite object_pool_suite = [] {
     };
 
     "cross_block_boundary"_test = [] {
-        constexpr std::size_t block = pool_test_tag::pool_size(object_pool<int>{});
+        const std::size_t block = pool_test_tag::pool_size(object_pool<int>{});
         object_pool<int> p;
 
         for (int i = 0; i < static_cast<int>(block); ++i)
@@ -86,15 +93,16 @@ suite object_pool_suite = [] {
         expect(eq(2_u, pool_test_tag::pools_allocated(p)));
         expect( pool_test_tag::elem(p, 1, 0) == 99_i );
     };
-
     "constexpr_build"_test = [] {
-        constexpr auto result = [] {
-            object_pool<int> p;
-            for (int i = 0; i < 15; ++i) p.add(i);
-            return pool_test_tag::global_slots(p);
-        }();
-        static_assert(result == 15u);
+        object_pool<int> p;
+        build_pool<15>(p);
+        expect(pool_test_tag::global_slots(p) == 15_u);
     };
+ 
+
 };
+
+
+int main() { }
 
 

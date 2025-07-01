@@ -1,7 +1,7 @@
 #include <ycetl/trace.hpp>
 #include <iostream>
 //#include <cstring>
-#include <fmt/core.h>
+//#include <fmt/core.h>
 
 struct Memory {
   std::array<char, 1000> memory;
