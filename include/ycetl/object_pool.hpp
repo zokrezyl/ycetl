@@ -93,55 +93,68 @@ protected:
 private:
   object_pool<T> *_current_pool = nullptr;
   object_pool_vector<T> *_pool_vector = nullptr;
+  std::size_t _total_number_of_slots_taken = 0;
 
 public:
   constexpr dynamic_object_pool() = default;
+
   constexpr ~dynamic_object_pool() { delete _pool_vector; }
 
-  constexpr std::size_t add(const T &v) {
-    if (!_pool_vector)
+  std::size_t add(const T &t) {
+    if (_pool_vector == nullptr) {
+      // lazy initialization of the pool vector
       _pool_vector = new object_pool_vector<T>();
-    if (!_current_pool || _current_pool->is_full())
+    }
+    if (_current_pool == nullptr) {
+      // lazy initialization of the current pool
       _current_pool = _pool_vector->get_new_pool();
-    return _current_pool->add(v);
+    }
+    if (_current_pool->is_full()) {
+      _current_pool = _pool_vector->get_new_pool();
+    }
+    _current_pool->add(t);
+    return _total_number_of_slots_taken++;
   }
 };
 
 /*───────────────────────────────────────────────────────────
-  4.  Sparse pool (bitmap of gaps)
+  4.  Sparse pool (bitmap of gaps)   — FIXED VERSION
 ───────────────────────────────────────────────────────────*/
 template <typename T> class sparse_object_pool : public dynamic_object_pool<T> {
   using base = dynamic_object_pool<T>;
 
-  std::uint8_t **_bitmaps = nullptr; // pointer array of bitmaps
-  std::size_t _bmp_cap = 0;          // bitmap slots allocated
-  std::size_t _bmp_taken = 0;        // bitmaps in use
+  std::uint8_t **_bitmaps = nullptr; // per-pool bitmaps
+  std::size_t _bmp_cap = 0;          // slots in _bitmaps
+  std::size_t _bmp_used = 0;         // bitmaps actually created
 
-  /* ensure we have a bitmap for each data pool */
+  /* ensure we have one bitmap for each data-pool */
   void sync() {
     std::size_t pools = base::vec() ? base::vec()->pools_taken() : 0;
-    if (pools <= _bmp_taken)
+    if (pools <= _bmp_used)
       return;
 
+    /* grow pointer array if necessary */
     if (pools > _bmp_cap) {
       std::size_t new_cap = pools + 8;
       auto **nv = new std::uint8_t *[new_cap]();
-      for (std::size_t i = 0; i < _bmp_taken; ++i)
+      for (std::size_t i = 0; i < _bmp_used; ++i)
         nv[i] = _bitmaps[i];
       delete[] _bitmaps;
       _bitmaps = nv;
       _bmp_cap = new_cap;
     }
-    auto ps = base::vec()->pool_size();
-    for (std::size_t i = _bmp_taken; i < pools; ++i)
-      _bitmaps[i] = new std::uint8_t[ps](); // zero-init
-    _bmp_taken = pools;
+
+    /* allocate zero-filled bitmap for every new pool */
+    std::size_t ps = base::vec()->pool_size();
+    for (std::size_t i = _bmp_used; i < pools; ++i)
+      _bitmaps[i] = new std::uint8_t[ps]();
+    _bmp_used = pools;
   }
 
 public:
   constexpr sparse_object_pool() = default;
   ~sparse_object_pool() {
-    for (std::size_t i = 0; i < _bmp_taken; ++i)
+    for (std::size_t i = 0; i < _bmp_used; ++i)
       delete[] _bitmaps[i];
     delete[] _bitmaps;
   }
@@ -154,15 +167,15 @@ public:
     return idx;
   }
 
-  /* iterator skipping gaps */
+  /* ─── read-only iterator skipping gaps ─────────────────── */
   class const_iterator {
-    const sparse_object_pool *sp_;
+    const sparse_object_pool *sp_{};
     std::size_t blk_{0}, off_{0};
 
     void skip() {
-      while (blk_ < sp_->_bmp_taken) {
+      while (blk_ < sp_->_bmp_used) {
         auto *bm = sp_->_bitmaps[blk_];
-        auto ps = sp_->base::vec()->pool_size();
+        std::size_t ps = sp_->base::vec()->pool_size();
         while (off_ < ps && bm[off_] == 0)
           ++off_;
         if (off_ < ps)
@@ -176,20 +189,22 @@ public:
     }
 
   public:
+    /* iterator traits for <iterator>/<algorithm> */
     using iterator_category = std::input_iterator_tag;
     using value_type = T;
     using difference_type = std::ptrdiff_t;
     using pointer = const T *;
     using reference = const T &;
 
+    /* default & value constructors */
+    const_iterator() = default;
     explicit const_iterator(const sparse_object_pool *p, std::size_t b = 0,
                             std::size_t o = 0)
         : sp_(p), blk_(b), off_(o) {
       skip();
     }
 
-    const_iterator();
-
+    /* basic ops */
     reference operator*() const { return *ptr(); }
     pointer operator->() const { return ptr(); }
 
@@ -198,7 +213,6 @@ public:
       skip();
       return *this;
     }
-
     const_iterator operator++(int) {
       auto tmp = *this;
       ++(*this);
@@ -206,7 +220,7 @@ public:
     }
 
     friend bool operator==(const const_iterator &it, std::default_sentinel_t) {
-      return it.blk_ >= it.sp_->_bmp_taken;
+      return it.blk_ >= it.sp_->_bmp_used;
     }
     friend bool operator!=(const const_iterator &it,
                            std::default_sentinel_t s) {
@@ -214,7 +228,7 @@ public:
     }
   };
 
-  const_iterator begin() const { return const_iterator(this); }
+  const_iterator begin() const { return const_iterator{this}; }
   std::default_sentinel_t end() const { return {}; }
 };
 

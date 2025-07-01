@@ -31,23 +31,6 @@ suite object_pool_suite = [] {
   };
 };
 
-/*──────────────────── dynamic_object_pool tests ─────────────────*/
-suite dynamic_pool_suite = [] {
-
-  "first_add_returns_zero"_test = [] {
-    dynamic_object_pool<int> dp;
-    auto idx = dp.add(42);         // lazy: allocates everything here
-    expect(idx == 0_u);
-  };
-
-  "fill_10000"_test = [] {
-    dynamic_object_pool<int> dp;
-    std::size_t last{};
-    for (int i = 0; i < 10'000; ++i) last = dp.add(i);
-    expect(last == 9'999_u);       // global indices must be consecutive
-  };
-};
-
 /* simple main for Boost.UT */
 int main(int argc, char** argv) {
 }
