@@ -20,8 +20,10 @@ namespace ycetl {
 
 namespace arena {
 
-template <typename T> class block {
+template <typename T, typename Storage = ycetl::storage::dynamic_storage>
+class block {
   T *_data = nullptr;
+  Storage *storage = nullptr;
   std::size_t _capacity = 0;
   std::size_t _used = 0;
 

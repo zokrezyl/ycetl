@@ -17,9 +17,11 @@ include(../cmake/CPM.cmake)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 #CPMAddPackage("gh:fmtlib/fmt#11.2.0") # is added by spdlog
-CPMAddPackage("gh:fmtlib/fmt#master") # is added by spdlog
+#CPMAddPackage("gh:fmtlib/fmt#master") # is added by spdlog
+CPMAddPackage("gh:gabime/spdlog@1.15.3")
 #CPMAddPackage("gh:boost-ext/ut@2.3.1")
 CPMAddPackage("gh:boost-ext/ut#master")
+CPMAddPackage("gh:zokrezyl/ytrace-private#main")
 
 
 file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp")
@@ -32,7 +34,7 @@ foreach(test_file ${TEST_SOURCES})
   add_executable(${test_name} ${test_file})
   #target_link_libraries(${test_name} PRIVATE fmt::fmt Boost::ut)
 
-  target_link_libraries(${test_name} PRIVATE Boost::ut)
+  target_link_libraries(${test_name} PRIVATE Boost::ut ytrace::ytrace spdlog::spdlog)
 
   target_compile_options(${test_name} PRIVATE -include iostream)
 

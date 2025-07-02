@@ -24,7 +24,8 @@ struct my_array2 {
   }
 };
 
-#define SIZE (800 * 1024 * 1024)
+//#define SIZE (800 * 1024 * 1024)
+#define SIZE (8 * 1024 * 1024)
 
 //constexpr unsigned char _data[SIZE];
 template <std::size_t _SIZE_>
