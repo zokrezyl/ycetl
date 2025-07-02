@@ -4,11 +4,19 @@
 #include <iterator>
 #include <new>
 
+#ifdef ENABLE_LOGGING
+#define log(msg)                                                               \
+  do {                                                                         \
+    std::cerr << __FILE__ << ":" << __LINE__ << ": " << msg << std::endl;      \
+  } while (0)
+#else
+#define log(msg)                                                               \
+  do {                                                                         \
+  } while (0)
+#endif
+
 namespace ycetl {
 
-/*───────────────────────────────────────────────────────────
-  1.  Single data pool (lazy allocation on first add)
-───────────────────────────────────────────────────────────*/
 template <typename T> class object_pool {
   T *_data = nullptr;
   std::size_t _capacity = 0;
@@ -35,11 +43,10 @@ public:
   [[nodiscard]] constexpr const T *data() const noexcept { return _data; }
 };
 
-/*───────────────────────────────────────────────────────────
-  2.  Vector that owns many object_pool<T>*
-───────────────────────────────────────────────────────────*/
 template <typename T> class object_pool_vector {
   object_pool<T> **_vector = nullptr;
+  // std::uint8_t **_gap_bitmaps = nullptr; // not yet implement, not even sure
+  // if needed
   std::size_t _growth = 8;
   std::size_t _pool_size = 10;
   std::size_t _capacity = 0;    // pointer slots
@@ -63,6 +70,12 @@ public:
     for (std::size_t i = 0; i < _pools_taken; ++i)
       delete _vector[i];
     delete[] _vector;
+
+    /*
+    for (std::size_t i = 0; i < _pools_taken; ++i)
+      delete[] _gap_bitmaps[i];
+    delete[] _gap_bitmaps;
+    */
   }
 
   constexpr object_pool<T> *get_new_pool() {
@@ -79,9 +92,6 @@ public:
   constexpr object_pool<T> *const *data() const noexcept { return _vector; }
 };
 
-/*───────────────────────────────────────────────────────────
-  3.  Facade that hides the vector
-───────────────────────────────────────────────────────────*/
 template <typename T> class dynamic_object_pool {
 protected:
   /* protected accessor for subclasses */
@@ -115,11 +125,11 @@ public:
     _current_pool->add(t);
     return _total_number_of_slots_taken++;
   }
+
+  // this should not be used directyl, only by subclasses
+  T *force_allocate() {}
 };
 
-/*───────────────────────────────────────────────────────────
-  4.  Sparse pool (bitmap of gaps)   — FIXED VERSION
-───────────────────────────────────────────────────────────*/
 template <typename T> class sparse_object_pool : public dynamic_object_pool<T> {
   using base = dynamic_object_pool<T>;
 
@@ -166,6 +176,8 @@ public:
     _bitmaps[idx / ps][idx % ps] = 1;
     return idx;
   }
+
+  T *allocate(std::size_t length) {}
 
   /* ─── read-only iterator skipping gaps ─────────────────── */
   class const_iterator {

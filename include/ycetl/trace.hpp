@@ -13,6 +13,8 @@
 
 #include <ycetl/cstring.hpp>
 
+#include <ycetl/object_pool.hpp>
+
 // simple constexpr execution tracer
 // simplest is to attache to the allocator
 namespace ycetl {
@@ -20,384 +22,6 @@ namespace ycetl {
 //
 //
 namespace trace {
-
-// algorithm for object pooling
-// 1. we have a vector of pools, each pool is an array of objects
-// 2. initially nothing is allocated
-// 3. each level signals to the above level that it has grown by setting the
-// XXX_allocated  above the threshlod
-
-#if 0
-template <typename T> class _object_pool_vector {
-  T **_vector =
-      nullptr; // the dynamically array of array of slots (pool vector)
-  std::size_t _growth = 0; // how many pools to grow at once, sort of onstant
-  std::size_t _pool_size =
-      0; // sort of  constant  during the lifetime of the pool
-  std::size_t _number_of_pools = 0; // current size of the pool vector
-  std::size_t _number_of_pools_taken =
-      0; // how many pools are allocated, if zerro, nothing, if _pools_allocated
-public:
-  object_pool_vector()
-      : _vector(nullptr) {} // lazy initialization, no memory allocated
-};
-
-template <typename T, typename GrowthHandler = void> class _object_pool {
-
-  friend struct pool_test_tag; // for testing purposes
-
-  object_pool_vector<T> *_pool_vector; // vector of pools, lazy allocated
-  T *_current_pool = nullptr;
-
-  // greater _num_pools, we need to grow the pool vector array
-  std::size_t _number_of_slots_taken =
-      0; // slots taken in the current pool, which is current free offset in the
-         // current pool, may be passed the last one, as we do lazy allocation
-  //
-  std::size_t _total_number_of_slots_taken =
-      0; // the total number of slots taken in all pools, this is used to report
-         // a global index
-
-public:
-  constexpr object_pool()
-      : _pool_vector(nullptr), _current_pool(nullptr),
-        _number_of_slots_taken(0), _total_number_of_slots_taken(0) {
-    // though we initialize the _slots_taken to zero, we set it artifically to
-    // "saturated" so that make_sure_pool() will see that is saturated and needs
-    // new  allocation
-  }
-
-  constexpr std::size_t add(const T &t) {
-    if (_pool_vector == nullptr) {
-      // lazy initialization of the pool vector
-      _pool_vector = new object_pool_vector<T>();
-    }
-    if (_current_pool == nullptr) {
-      // lazy initialization of the current pool
-      _current_pool = _pool_vector->get_new_pool();
-    }
-    if (_number_of_slots_taken >= _pool_vector->_pool_size) {
-      _current_pool = _pool_vector->get_new_pool();
-    }
-    _current_pool[_number_of_slots_taken] =
-        t;                    // add the object to the current pool
-    _number_of_slots_taken++; // increment the slots taken in the current pool
-    _total_number_of_slots_taken++;          // increment the total slots taken
-    return _total_number_of_slots_taken - 1; // return the index of the object
-  }
-
-  // destructor
-  constexpr ~object_pool() {
-    if (_pool_vector) {
-      for (std::size_t i = 0; i < _pool_vector_size; ++i) {
-        if (_pool_vector[i]) {
-          delete[] _pool_vector[i]; // deallocate the pool
-        }
-      }
-      delete[] _pool_vector; // deallocate the pool vector
-    }
-  }
-};
-
-#endif
-
-template <typename T> class object_pool {
-  T *_data = nullptr;        // pointer to the data
-  std::size_t _capacity = 0; // capacity of the pool (fixed)
-  std::size_t _used = 0;     // number of elements already stored
-
-public:
-  /* just remember the capacity; nothing is allocated yet */
-  constexpr explicit object_pool(std::size_t cap) : _capacity(cap) {}
-
-  constexpr ~object_pool() { delete[] _data; }
-
-  [[nodiscard]] constexpr bool is_full() const noexcept {
-    return _data && _used >= _capacity; // if no data yet, never “full”
-  }
-
-  [[nodiscard]] constexpr std::size_t size() const noexcept { return _used; }
-
-  /* lazy-allocate on first add, then write the element */
-  constexpr std::size_t add(const T &v) {
-    if (_data == nullptr) // allocate lazily
-      _data = new T[_capacity];
-
-    _data[_used] = v;
-    return _used++; // return previous index, then bump
-  }
-
-  /* raw access if the caller needs it */
-  [[nodiscard]] constexpr T *data() noexcept { return _data; }
-  [[nodiscard]] constexpr const T *data() const noexcept { return _data; }
-};
-
-template <typename T> class object_pool_vector {
-  object_pool<T> **_vector = nullptr;
-  std::size_t _capacity = 0;    // pointer slots
-  std::size_t _growth = 0;      // grow step
-  std::size_t _pool_size = 0;   // elements per pool
-  std::size_t _pools_taken = 0; // valid pools
-
-  constexpr void grow_vector() {
-    std::size_t new_cap = (_capacity ? _capacity : 0) + _growth;
-    auto **new_vec = new object_pool<T> *[new_cap]();
-    for (std::size_t i = 0; i < _pools_taken; ++i)
-      new_vec[i] = _vector[i];
-    delete[] _vector;
-    _vector = new_vec;
-    _capacity = new_cap;
-  }
-
-public:
-  constexpr object_pool_vector(std::size_t pool_size = 10,
-                               std::size_t growth = 8)
-      : _growth(growth), _pool_size(pool_size) {}
-
-  constexpr ~object_pool_vector() {
-    for (std::size_t i = 0; i < _pools_taken; ++i)
-      delete _vector[i];
-    delete[] _vector;
-  }
-  constexpr std::size_t pool_size() const noexcept { return _pool_size; }
-  constexpr std::size_t pools_taken() const noexcept { return _pools_taken; }
-  constexpr object_pool<T> **data() const noexcept { return _vector; }
-
-  /* lazily creates a new data-pool and returns its pointer */
-  [[nodiscard]] constexpr object_pool<T> *get_new_pool() {
-    if (_pools_taken == _capacity)
-      grow_vector();
-    auto *p = new object_pool<T>(_pool_size);
-    _vector[_pools_taken++] = p;
-    return p;
-  }
-};
-
-template <typename T> class dynamic_object_pool {
-  object_pool<T> *_current_pool;
-  object_pool_vector<T> *_pool_vector;
-  std::size_t _total_number_of_slots_taken = 0;
-
-protected: // so sparse_object_pool can see it
-  constexpr object_pool_vector<T> *vec() noexcept { return _pool_vector; }
-  constexpr const object_pool_vector<T> *vec() const noexcept {
-    return _pool_vector;
-  }
-
-public:
-  dynamic_object_pool()
-      : _current_pool(nullptr), _pool_vector(nullptr),
-        _total_number_of_slots_taken(0) {}
-
-  std::size_t add(const T &t) {
-    if (_pool_vector == nullptr) {
-      // lazy initialization of the pool vector
-      _pool_vector = new object_pool_vector<T>();
-    }
-    if (_current_pool == nullptr) {
-      // lazy initialization of the current pool
-      _current_pool = _pool_vector->get_new_pool();
-    }
-    if (_current_pool->is_full()) {
-      _current_pool = _pool_vector->get_new_pool();
-    }
-    _current_pool->add(t);
-    return _total_number_of_slots_taken++;
-  }
-};
-
-#if 0
-template <typename T> class sparse_object_pool : public object_pool<T> {
-  using base = object_pool<T>;
-
-  std::uint8_t **_gap_vector = nullptr; // bitmap array mirrors _pool_vector
-
-  /* grow _gap_vector when base grows ----------------------------------- */
-  constexpr void grow_gap_vector() {
-    std::size_t new_sz = this->_pool_vector_size; // same size
-    auto gv = new std::uint8_t *[new_sz]();       // zero-init
-    for (std::size_t i = 0; i < this->_pools_allocated; ++i)
-      gv[i] = _gap_vector ? _gap_vector[i] : nullptr;
-    delete[] _gap_vector;
-    _gap_vector = gv;
-  }
-
-  /* ensure bitmap for current pool exists ------------------------------ */
-  constexpr void ensure_gap_pool() {
-    if (this->_pools_allocated > this->_pool_vector_size)
-      grow_gap_vector();
-    if (!_gap_vector[this->_pools_allocated - 1])
-      _gap_vector[this->_pools_allocated - 1] =
-          new std::uint8_t[this->_pool_size]{}; // zero-filled
-  }
-
-public:
-  constexpr sparse_object_pool() = default;
-
-  /* add object and mark gap-bitmap -------------------------------------- */
-  constexpr std::size_t add(const T &t) {
-    std::size_t idx = base::add(t); // use base allocator
-    ensure_gap_pool();
-    std::size_t off = this->_slots_taken - 1;         // 0-based slot
-    _gap_vector[this->_pools_allocated - 1][off] = 1; // mark used
-    return idx;
-  }
-
-  /* read-only iterator that skips zero bytes --------------------------- */
-  class const_iterator {
-    const sparse_object_pool *sp_;
-    std::size_t pool_ = 0, off_ = 0;
-
-    void skip() {
-      while (pool_ < sp_->_pools_allocated) {
-        auto *bm = sp_->_gap_vector[pool_];
-        while (off_ < sp_->_pool_size && bm && bm[off_] == 0)
-          ++off_;
-        if (off_ < sp_->_pool_size)
-          return;
-        ++pool_;
-        off_ = 0;
-      }
-    }
-    const T *ptr() const { return sp_->_pool_vector[pool_] + off_; }
-
-  public:
-    explicit constexpr const_iterator(const sparse_object_pool *p,
-                                      std::size_t po = 0, std::size_t of = 0)
-        : sp_(p), pool_(po), off_(of) {
-      skip();
-    }
-
-    constexpr const T &operator*() const { return *ptr(); }
-    constexpr const T *operator->() const { return ptr(); }
-    constexpr const_iterator &operator++() {
-      ++off_;
-      skip();
-      return *this;
-    }
-    friend constexpr bool operator==(const_iterator it,
-                                     std::default_sentinel_t) {
-      return it.pool_ >= it.sp_->_pools_allocated;
-    }
-    friend constexpr bool operator!=(const_iterator it,
-                                     std::default_sentinel_t s) {
-      return !(it == s);
-    }
-  };
-
-  constexpr const_iterator begin() const { return const_iterator{this}; }
-  constexpr std::default_sentinel_t end() const { return {}; }
-};
-
-#endif
-
-/* ------------------------------------------------------------------
-   sparse_object_pool<T>
-   – was: public object_pool<T>
-   – now: public dynamic_object_pool<T>
-------------------------------------------------------------------- */
-template <typename T> class sparse_object_pool : public dynamic_object_pool<T> {
-  using base = dynamic_object_pool<T>; // new base alias
-
-  /* bitmap vector in lock-step with the pool vector */
-  std::uint8_t **_gap_vector = nullptr; // one byte per slot
-  std::size_t _gap_vec_cap = 0;         // pointer capacity
-  std::size_t _pools_mapped = 0;        // bitmaps allocated
-
-  /* ensure bitmap side grows when a new data pool appears */
-  void sync_with_base() {
-    /* number of data pools currently live in the base */
-    std::size_t pools =
-        base::_pool_vector ? base::_pool_vector->_pools_taken : 0;
-
-    if (pools > _pools_mapped) {
-      /* grow bitmap pointer array if needed */
-      if (pools > _gap_vec_cap) {
-        std::size_t new_cap = pools + 8;
-        auto **nv = new std::uint8_t *[new_cap]();
-        for (std::size_t i = 0; i < _pools_mapped; ++i)
-          nv[i] = _gap_vector[i];
-        delete[] _gap_vector;
-        _gap_vector = nv;
-        _gap_vec_cap = new_cap;
-      }
-      /* allocate bitmaps for the newly added pools */
-      for (std::size_t i = _pools_mapped; i < pools; ++i) {
-        _gap_vector[i] = new std::uint8_t[base::_pool_vector->_pool_size]{};
-      }
-      _pools_mapped = pools;
-    }
-  }
-
-public:
-  constexpr sparse_object_pool() = default;
-  ~sparse_object_pool() {
-    for (std::size_t i = 0; i < _pools_mapped; ++i)
-      delete[] _gap_vector[i];
-    delete[] _gap_vector;
-  }
-
-  /* override add(): mark the gap bitmap, then delegate to base */
-  std::size_t add(const T &value) {
-    /* feed base first (this allocates pools lazily) */
-    std::size_t global_idx = base::add(value);
-
-    /* ensure bitmaps exist for every data pool */
-    sync_with_base();
-
-    /* mark the slot “used” */
-    std::size_t ps = base::_pool_vector->_pool_size;
-    std::size_t blk = global_idx / ps;
-    std::size_t off = global_idx % ps;
-    _gap_vector[blk][off] = 1;
-
-    return global_idx;
-  }
-
-  /* simple forward iterator that skips zero bits */
-  class const_iterator {
-    const sparse_object_pool *sp_;
-    std::size_t blk_{0}, off_{0};
-
-    void skip() {
-      while (blk_ < sp_->_pools_mapped) {
-        auto *bm = sp_->_gap_vector[blk_];
-        auto ps = sp_->base::_pool_vector->_pool_size;
-        while (off_ < ps && bm[off_] == 0)
-          ++off_;
-        if (off_ < ps)
-          return;
-        ++blk_, off_ = 0;
-      }
-    }
-    const T *ptr() const {
-      return sp_->base::_pool_vector->_vector[blk_] + off_;
-    }
-
-  public:
-    explicit const_iterator(const sparse_object_pool *p, std::size_t b = 0,
-                            std::size_t o = 0)
-        : sp_(p), blk_(b), off_(o) {
-      skip();
-    }
-
-    const T &operator*() const { return *ptr(); }
-    const_iterator &operator++() {
-      ++off_;
-      skip();
-      return *this;
-    }
-    friend bool operator==(const_iterator it, std::default_sentinel_t) {
-      return it.blk_ >= it.sp_->_pools_mapped;
-    }
-    friend bool operator!=(const_iterator it, std::default_sentinel_t s) {
-      return !(it == s);
-    }
-  };
-
-  const_iterator begin() const { return const_iterator{this}; }
-  std::default_sentinel_t end() const { return {}; }
-};
 
 template <typename T> constexpr std::size_t safe_sizeof() {
   if constexpr (std::is_empty_v<T>) {
@@ -448,7 +72,72 @@ constexpr void pack(object_pool<char *> &object_pool, const T &value) {
   // pack(object_pool->allocate(safe_sizeof<T>()), value);
 }
 
+using ConstructorFn = void *(*)(char *);
+
+template <typename T> constexpr std::size_t get_serialized_size(const T &v) {
+  return safe_sizeof<T>() +
+         safe_sizeof<std::size_t>(); /* for the constructor index */
+}
+
+template <typename... Args>
+constexpr std::size_t get_serialized_size(const Args &...args) {
+  return (get_serialized_size(args) + ...);
+}
+
+struct TraceMessageHeader {
+  std::size_t size;
+  // to store the pointer is superfluous
+};
+
+struct TraceMessageCollector {
+  using ConstructorFn = void *(*)(char *);
+  ycetl::dynamic_object_pool<ConstructorFn> &constructors;
+  ycetl::dynamic_object_pool<char *> buffer; // memory pool for the objects
+  //
+  constexpr TraceMessageCollector(
+      ycetl::dynamic_object_pool<ConstructorFn> &constructors)
+      : constructors(constructors), buffer() {}
+};
+
+struct TraceMessage {
+  char *buffer = nullptr; // array of constructor indices
+  size_t _size = 0;
+  ycetl::dynamic_object_pool<ConstructorFn>
+      &constructors; // object pool for constructors
+
+public:
+  constexpr TraceMessage(
+      ycetl::dynamic_object_pool<ConstructorFn> &constructors)
+      : constructors(constructors), buffer(nullptr), _size(0) {}
+
+  template <typename... Args> constexpr void pack(Args &&...args) {
+
+    _size = get_serialized_size(args...) + sizeof(TraceMessageHeader) +
+            sizeof(std::size_t);
+    if (_size == 0) {
+      throw std::runtime_error("Cannot create TraceMessage with zero size");
+      return; // nothing to do
+    }
+
+    if (!buffer) {
+      throw std::runtime_error("Failed to allocate memory for TraceMessage");
+    }
+
+    TraceMessageCollector collector(constructors);
+    (store_one(collector, std::forward<Args>(args)), ...);
+  }
+
+  // destructor
+  constexpr ~TraceMessage() {
+    if (buffer) {
+      delete[] buffer; // deallocate the buffer
+    }
+  }
+};
+
 struct Trace {
+
+  dynamic_object_pool<TraceMessage *> _messages;
   char *_memory = nullptr;
   std::size_t _size = 0; // size for non-owned memory
 
@@ -511,6 +200,8 @@ public:
     _total_consumed += _size;
     return ptr;
   }
+
+  template <typename... Args> constexpr void add(Args &&...args) {}
 
   // destructor
   constexpr ~Trace() {
@@ -622,16 +313,6 @@ template <typename T> constexpr void *construct_in_place(char *memory) {
   return new (memory) T();
 }
 
-template <typename T> constexpr std::size_t get_serialized_size(const T &v) {
-  return safe_sizeof<T>() +
-         safe_sizeof<std::size_t>(); /* for the constructor index */
-}
-
-template <typename... Args>
-constexpr std::size_t get_serialized_size(const Args &...args) {
-  return (get_serialized_size(args) + ...);
-}
-
 #if 0
 // deleteme
 class TmpMemory {
@@ -655,18 +336,6 @@ public:
 };
 
 #endif
-
-using ConstructorFn = void *(*)(char *);
-
-struct TraceMessageCollector {
-  using ConstructorFn = void *(*)(char *);
-  dynamic_object_pool<ConstructorFn> &constructors;
-  dynamic_object_pool<char *> buffer; // memory pool for the objects
-  //
-  constexpr TraceMessageCollector(
-      dynamic_object_pool<ConstructorFn> &constructors)
-      : constructors(constructors), buffer() {}
-};
 
 #if 0
 // delme
@@ -695,7 +364,6 @@ public:
 template <typename T>
 constexpr static void store_one(TraceMessageCollector &collector,
                                 const T &value) {
-  using ConstructorFn = void *(*)(char *);
 
   ConstructorFn constructor = &construct_in_place<T>;
 
@@ -708,46 +376,6 @@ constexpr static void store_one(TraceMessageCollector &collector,
   pack(ptr, value);
   */
 }
-
-struct TraceMessageHeader {
-  std::size_t size;
-  // to store the pointer is superfluous
-};
-
-struct TraceMessage {
-  char *buffer = nullptr; // array of constructor indices
-  size_t _size = 0;
-  dynamic_object_pool<ConstructorFn>
-      &constructors; // object pool for constructors
-
-public:
-  constexpr TraceMessage(dynamic_object_pool<ConstructorFn> &constructors)
-      : constructors(constructors), buffer(nullptr), _size(0) {}
-
-  template <typename... Args> constexpr void pack(Args &&...args) {
-
-    _size = get_serialized_size(args...) + sizeof(TraceMessageHeader) +
-            sizeof(std::size_t);
-    if (_size == 0) {
-      throw std::runtime_error("Cannot create TraceMessage with zero size");
-      return; // nothing to do
-    }
-
-    if (!buffer) {
-      throw std::runtime_error("Failed to allocate memory for TraceMessage");
-    }
-
-    TraceMessageCollector collector(constructors);
-    (store_one(collector, std::forward<Args>(args)), ...);
-  }
-
-  // destructor
-  constexpr ~TraceMessage() {
-    if (buffer) {
-      delete[] buffer; // deallocate the buffer
-    }
-  }
-};
 
 struct _SharedPtrControlBlock {
   std::size_t _ref_count;
@@ -764,7 +392,7 @@ class Tracer {
   Trace *_trace = nullptr;
   _SharedPtrControlBlock *_control_block;
   using ConstructorFn = void *(*)(char *);
-  dynamic_object_pool<ConstructorFn> _constructors;
+  ycetl::dynamic_object_pool<ConstructorFn> _constructors;
 
 public:
   constexpr Tracer()
@@ -790,6 +418,8 @@ public:
   }
 
   template <typename... Args> constexpr void trace(Args &&...args) {
+
+    _trace->add(std::forward<Args>(args)...);
     /*
     std::size_t total_size = get_serialized_size(args...);
 
@@ -797,8 +427,10 @@ public:
     char *memory = new char[memory_size]
     */
 
+    /*
     TraceMessage msg(_constructors);
     msg.pack(std::forward<Args>(args)...);
+    */
 
     /*
     std::size_t total_size = get_serialized_size(args...) +
