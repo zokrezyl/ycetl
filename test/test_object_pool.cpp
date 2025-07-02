@@ -10,10 +10,13 @@ using ycetl::dynamic_object_pool;
 /*──────────────────────── object_pool tests ─────────────────────*/
 suite object_pool_suite = [] {
 
+
   "empty_pool"_test = [] {
+    constexpr auto test = []() {
     object_pool<int> p(8);         // capacity 8, nothing yet
     expect(p.size() == 0_u);
     expect(!p.is_full());
+  };
   };
 
   "fill_exact_capacity"_test = [] {

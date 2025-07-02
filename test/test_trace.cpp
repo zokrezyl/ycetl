@@ -16,7 +16,8 @@ struct TestObject {
 };
 
 template <std::size_t Size>
-constexpr ycetl::trace::FrozenTrace<Size> test_trace(){
+//constexpr ycetl::trace::FrozenTrace<Size> test_trace(){
+constexpr int test_trace(){
   ycetl::trace::Tracer tracer;
   tracer.trace("test_trace");
   tracer.trace(TestObject{});
@@ -25,8 +26,9 @@ constexpr ycetl::trace::FrozenTrace<Size> test_trace(){
   tracer.trace("test_trace", "trace_test");
   ycetl::trace::Trace * trace = tracer.trace();
 
-  ycetl::trace::FrozenTrace<Size> frozen_trace(trace);
-  return frozen_trace;
+  //ycetl::trace::FrozenTrace<Size> frozen_trace(trace);
+  //return frozen_trace;
+  return 0;
 }
 
 #include <algorithm>

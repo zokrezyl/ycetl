@@ -68,8 +68,8 @@ constexpr void pack(char *buffer, const char (&value)[N]) {
 }
 
 template <typename T>
-constexpr void pack(object_pool<char *> &object_pool, const T &value) {
-  // pack(object_pool->allocate(safe_sizeof<T>()), value);
+constexpr void pack(object_pool<char *> &dynamic_arena, const T &value) {
+  // pack(arena->allocate(safe_sizeof<T>()), value);
 }
 
 using ConstructorFn = void *(*)(char *);
@@ -91,23 +91,22 @@ struct TraceMessageHeader {
 
 struct TraceMessageCollector {
   using ConstructorFn = void *(*)(char *);
-  ycetl::dynamic_object_pool<ConstructorFn> &constructors;
-  ycetl::dynamic_object_pool<char *> buffer; // memory pool for the objects
+  ycetl::object_pool<ConstructorFn> &constructors;
+  ycetl::object_pool<char *> buffer; // memory pool for the objects
   //
   constexpr TraceMessageCollector(
-      ycetl::dynamic_object_pool<ConstructorFn> &constructors)
+      ycetl::object_pool<ConstructorFn> &constructors)
       : constructors(constructors), buffer() {}
 };
 
 struct TraceMessage {
   char *buffer = nullptr; // array of constructor indices
   size_t _size = 0;
-  ycetl::dynamic_object_pool<ConstructorFn>
+  ycetl::object_pool<ConstructorFn>
       &constructors; // object pool for constructors
 
 public:
-  constexpr TraceMessage(
-      ycetl::dynamic_object_pool<ConstructorFn> &constructors)
+  constexpr TraceMessage(ycetl::object_pool<ConstructorFn> &constructors)
       : constructors(constructors), buffer(nullptr), _size(0) {}
 
   template <typename... Args> constexpr void pack(Args &&...args) {
@@ -135,90 +134,33 @@ public:
   }
 };
 
+template <typename T> constexpr void *construct_in_place(char *memory) {
+  return new (memory) T();
+}
+
 struct Trace {
-
-  dynamic_object_pool<TraceMessage *> _messages;
-  char *_memory = nullptr;
-  std::size_t _size = 0; // size for non-owned memory
-
-  static const std::size_t _number_of_slots =
-      1000; // maximum number of slots in the trace
-  static const std::size_t _slot_size = 10000; // size of each slot in bytes
-  //
-  std::size_t _offset =
-      0; // offset in memory which is in the current slot if owns memory
-  std::array<std::pair<char *, std::size_t>, _number_of_slots>
-      _slots; // the second element is the amount consumed in the slot
-  bool _owns_memory = false;
-  std::size_t _slots_allocated = 0; // not allocated;
-  std::size_t _total_consumed =
-      0; // total amount of memory consumed in the trace
+private:
+  ycetl::object_pool<TraceMessage> *_messages = nullptr;
+  // we need to store the constructors separately as we cannot serialize
+  // pointers in constexpr
+  ycetl::object_pool<ConstructorFn *> *_constructors = nullptr;
 
 public:
   // lazy initialization
-  constexpr Trace()
-      : _memory(nullptr), _slots_allocated(0), _size(0), _owns_memory(true) {}
-  constexpr Trace(char *memory, std::size_t size)
-      : _memory(memory), _size(size) {
-    if (_memory == nullptr || _size == 0) {
-      // TODO: throw exception
-    }
-  }
-
-  constexpr char *get_memory(std::size_t _size) {
-    if (_size == 0) {
-      throw std::runtime_error("Cannot allocate zero size memory for trace");
-      return nullptr; // TODO: throw exception
-    }
-    if (_memory == nullptr) {
-      if (not _owns_memory) {
-        throw std::runtime_error("Cannot allocate memory for trace, no memory");
-        // TODO assert someway
-        return nullptr;
-      }
-    }
-    if (_owns_memory && _memory && _offset + _size > _slot_size) {
-      // we do not fit in current slot, allocate a new one
-      _slots[_slots_allocated - 1].second =
-          _offset;       // save the consumed size in the current slot
-      _memory = nullptr; // make it null for the next step
-    }
-    if (_memory == nullptr && _owns_memory) {
-      // assert that _slots_allocated is zero at this moment
-      _memory = new char[_slot_size];
-      _slots[_slots_allocated].first = _memory;
-      _slots_allocated = +1;
-    }
-    if (not _owns_memory && _memory == nullptr) {
-      throw std::runtime_error("Cannot allocate memory for trace, no memory");
-      // we do not own memory, so we cannot allocate
-      return nullptr; // TODO: throw exception
-    }
-
-    char *ptr = _memory + _offset;
-    _offset += _size;
-    _total_consumed += _size;
-    return ptr;
-  }
+  constexpr Trace() {}
 
   template <typename... Args> constexpr void add(Args &&...args) {}
 
   // destructor
   constexpr ~Trace() {
-    if (_owns_memory) {
-      for (std::size_t i = 0; i < _slots_allocated; ++i) {
-        if (_slots[i].first != nullptr) {
-          delete[] _slots[i].first;
-        }
-      }
+    if (_messages) {
+      delete _messages; // deallocate the messages
+    }
+    if (_constructors) {
+      delete _constructors; // deallocate the constructors
     }
   }
-
-  constexpr std::size_t length() const {
-    return _total_consumed;
-    ;
-  }
-
+#if 0
   /* ───── read-only iterator (only Trace* in ctor) ───────── */
   class const_iterator {
     const Trace *t_ = nullptr;
@@ -307,59 +249,9 @@ public:
     return const_iterator{this};
   }
   constexpr std::default_sentinel_t end() const noexcept { return {}; }
-};
-
-template <typename T> constexpr void *construct_in_place(char *memory) {
-  return new (memory) T();
-}
-
-#if 0
-// deleteme
-class TmpMemory {
-  char *_memory = nullptr;
-  std::size_t _size = 0;
-  std::size_t _offset = 0;
-
-public:
-  constexpr TmpMemory(char *memory, std::size_t size)
-      : _memory(memory), _size(size), _offset(0) {}
-
-  constexpr char *get_memory(std::size_t size) {
-    if (_memory == nullptr || _size == 0 || _offset + size > _size) {
-      throw std::runtime_error("Cannot allocate memory for trace");
-      return nullptr; // TODO: throw exception
-    }
-    char *ptr = _memory + _offset;
-    _offset += size;
-    return ptr;
-  }
-};
 
 #endif
-
-#if 0
-// delme
-class Constructors {
-  std::array<ConstructorFn, 10000> _constructors;
-
-public:
-  constexpr Constructors() : _constructors() {}
-
-  constexpr std::size_t add_constructor(ConstructorFn constructor) {
-    // TODO .. make this a map
-    for (std::size_t i = 0; i < _constructors.size(); ++i) {
-      if (_constructors[i] == constructor) {
-        return i; // already exists
-      }
-      if (_constructors[i] == nullptr) {
-        _constructors[i] = constructor;
-        return i;
-      }
-    }
-    return _constructors.size(); // no space left
-  }
 };
-#endif
 
 template <typename T>
 constexpr static void store_one(TraceMessageCollector &collector,
@@ -391,8 +283,6 @@ public:
 class Tracer {
   Trace *_trace = nullptr;
   _SharedPtrControlBlock *_control_block;
-  using ConstructorFn = void *(*)(char *);
-  ycetl::dynamic_object_pool<ConstructorFn> _constructors;
 
 public:
   constexpr Tracer()
@@ -452,6 +342,7 @@ public:
   constexpr Trace *trace() { return _trace; }
 };
 
+#if 0
 template <std::size_t N> class FrozenTrace {
   std::array<char, N> _memory;
   std::size_t _consumed = 0;
@@ -480,6 +371,7 @@ public:
   }
   [[nodiscard]] constexpr bool empty() const noexcept { return _consumed == 0; }
 };
+#endif
 
 // clang-format on
 } // namespace trace
