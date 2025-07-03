@@ -12,10 +12,23 @@ template <typename _Tp, typename _Alloc> struct test {
 };
 
 
+struct Test {
+
+  int i;
+  int j;
+};
+
 int main() {
 
-  std::vector<int> std_vector;
-  ycetl::vector<int> ycetl_vector;
+  ycetl::vector<int> ycetl_int_vector;
+  ycetl_int_vector.push_back(42);
+  ycetl_int_vector.push_back(100);
+  ycetl_int_vector.clear();
 
-  ycetl_vector.push_back(1);
+  ycetl::vector<Test> ycetl_test_vector;
+  ycetl_test_vector.push_back({1, 2});
+  ycetl_test_vector.push_back({3, 4});
+  ycetl_test_vector.clear();
+
+
 }
