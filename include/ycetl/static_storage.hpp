@@ -2,12 +2,11 @@
 
 #include <memory>
 
+#include <ycetl/storage_base.hpp>
 #include <ytrace/ytrace.hpp>
 
 namespace ycetl {
 namespace storage {
-
-#include <ycetl/storage_base.hpp>
 
 // this is a dummy dynamic heap allocator
 // that just stores the alloccated pointers
@@ -117,8 +116,7 @@ public:
     return this->array_aligned_alloc(_alignof, _sizeof, num_elements);
   }
 
-  template <typename U>
-  static constexpr storage_vtable<U> vtable{
+  static constexpr storage_vtable vtable{
       [](void *self, std::size_t _alignof, std::size_t _sizeof) {
         return static_cast<static_storage *>(self)->_aligned_alloc(_alignof,
                                                                    _sizeof);
@@ -128,10 +126,10 @@ public:
         return static_cast<static_storage *>(self)->_array_aligned_alloc(
             _alignof, _sizeof, num_elements);
       },
-      [](void *self, U *ptr) {
+      [](void *self, void *ptr) {
         static_cast<static_storage *>(self)->deallocate(ptr);
       },
-      [](void *self, U *ptr, std::size_t sz) {
+      [](void *self, void *ptr, std::size_t sz) {
         static_cast<static_storage *>(self)->deallocate(ptr, 0);
       },
   };

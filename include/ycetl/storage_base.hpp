@@ -6,6 +6,23 @@
 namespace ycetl {
 namespace storage {
 
+struct storage_vtable {
+  void *(*aligned_alloc)(
+      void * /*this*/, std::size_t /*alignof*/,
+      std::size_t /*sizeof*/); // second parameter is used for
+                               // typed allocate with aligmnment
+  void *(*array_aligned_alloc)(
+      void * /*this*/, std::size_t /*alignof*/, std::size_t /*sizeof*/,
+      std::size_t /*num of elements in array*/); // last parameter is for the
+                                                 // typed array allocation with
+                                                 // alignment
+  void (*aligned_free)(void *, void *);          // second parameter is used for
+                                        // typed deallocate with alignment
+  void (*array_aligned_free)(void *, void *,
+                             std::size_t); // last parameter is for the typed
+                                           // array deallocation with alignment
+};
+
 template <typename T, typename StorageImpl> class storage_base {
 public:
   // for array allocation

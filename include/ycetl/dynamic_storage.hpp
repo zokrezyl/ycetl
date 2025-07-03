@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <ycetl/storage.hpp>
 #include <ycetl/storage_base.hpp>
 
 namespace ycetl {
@@ -9,8 +8,7 @@ namespace storage {
 
 // this is a dummy dynamic heap allocator
 // that just stores the alloccated pointers
-template <typename T>
-class dynamic_storage : public storage_base<T, dynamic_storage<T>> {
+template <typename T> class dynamic_storage {
   T **_allocation_vector = nullptr;
   T **_array_allocation_vector = nullptr;
 
@@ -23,6 +21,9 @@ class dynamic_storage : public storage_base<T, dynamic_storage<T>> {
   std::size_t _current_array_vector_size = 0;
   std::size_t _array_slots_taken = 0;
 
+  // this is the interface for the basic_storage that implements the aligned
+  // allocation
+public:
 public:
   using value_type = T;
   // lazy initialization of the data pointer
@@ -99,6 +100,50 @@ public:
     return new_array;
   }
 
+  // interface for the Allocator
+  void *aligned_alloc(std::size_t _alignof, std::size_t _sizeof) {
+    std::size_t bytes_remaining = (capacity - offset) * sizeof(T);
+    if (!std::align(_alignof, _sizeof, aligned, bytes_remaining))
+      throw std::bad_alloc();
+    void *end_to_align = static_cast<std::byte *>(aligned) + _sizeof;
+    if (!std::align(alignof(T), 1, end_to_align, bytes_remaining)) {
+      throw std::bad_alloc(); // should never happen
+    }
+    offset = static_cast<T *>(end_to_align) - storage;
+    impl->set_offset(offset);
+
+    T *new_object = new T();
+    // store the pointer in the allocation vector
+    _allocation_vector[_slots_taken++] = new_object;
+    return new_object;
+  }
+
+  // interface for the Allocator
+  void *aligned_alloc(std::size_t _alignof, std::size_t _sizeof,
+                      std::size_t num_elements) {
+    if (_current_vector_size == 0) {
+      _allocation_vector = new T *[_initial_vector_size];
+      _current_vector_size = _initial_vector_size;
+      _slots_taken = 0;
+    } else {
+      if (_slots_taken >= _current_vector_size) {
+        // Resize the allocation vector
+        std::size_t new_size = _current_vector_size * _vector_growth_factor;
+        T **new_vector = new T *[new_size];
+        for (std::size_t i = 0; i < _current_vector_size; ++i) {
+          new_vector[i] = _allocation_vector[i];
+        }
+        delete[] _allocation_vector;
+        _allocation_vector = new_vector;
+        _current_vector_size = new_size;
+      }
+    }
+    T *new_object = new T();
+    // store the pointer in the allocation vector
+    _allocation_vector[_slots_taken++] = new_object;
+    return new_object;
+  }
+
   // Deallocate memory
   constexpr void deallocate(T *ptr) {
     throw std::runtime_error(
@@ -111,20 +156,50 @@ public:
         "Use the destructor to free memory.");
   }
 
+  void *_aligned_alloc(std::size_t _alignof, std::size_t _sizeof) {
+    yinfo("Allocating aligned memory: alignof={}, sizeof={}", _alignof,
+          _sizeof);
+    // we use the default new operator for aligned allocation
+    return this->aligned_alloc(_alignof, _sizeof);
+  }
+
+  void *_array_aligned_alloc(std::size_t _alignof, std::size_t _sizeof,
+                             std::size_t num_elements) {
+    yinfo("Allocating aligned array memory: alignof={}, sizeof={}, "
+          "num_elements={}",
+          _alignof, _sizeof, num_elements);
+    // we use the default new operator for aligned allocation
+    return this->aligned_array_alloc(_alignof, _sizeof, num_elements);
+  }
+
+  void _aligned_free(void *ptr) {
+    yinfo("Freeing aligned memory: ptr={}", ptr);
+    // we use the default delete operator for aligned deallocation
+    // this->aligned_free(ptr);
+  }
+
+  void _array_aligned_free(void *ptr, std::size_t size) {
+    yinfo("Freeing aligned array memory: ptr={}, size={}", ptr, size);
+    // we use the default delete operator for aligned deallocation
+    // this->aligned_array_free(ptr, size);
+  }
+
   // we expose the vtable for static storage (for type erasure)
-  template <typename U>
-  static constexpr storage_vtable<U> vtable{
-      [](void *self) {
-        return static_cast<dynamic_storage *>(self)->aligned_alloc();
+  static constexpr storage_vtable vtable{
+      [](void *self, std::size_t _alignof, std::size_t _sizeof) {
+        return static_cast<dynamic_storage *>(self)->_aligned_alloc(_alignof,
+                                                                    _sizeof);
       },
-      [](void *self, std::size_t sz) {
-        return static_cast<dynamic_storage *>(self)->allocate(sz);
+      [](void *self, std::size_t _alignof, std::size_t _sizeof,
+         std::size_t num_elements) {
+        return static_cast<dynamic_storage *>(self)->_array_aligned_alloc(
+            _alignof, _sizeof, num_elements);
       },
-      [](void *self, U *ptr) {
-        static_cast<dynamic_storage *>(self)->deallocate(ptr);
+      [](void *self, void *ptr) {
+        static_cast<dynamic_storage *>(self)->_aligned_free(ptr);
       },
-      [](void *self, U *ptr, std::size_t sz) {
-        static_cast<dynamic_storage *>(self)->deallocate(ptr, 0);
+      [](void *self, void *ptr, std::size_t sz) {
+        static_cast<dynamic_storage *>(self)->_array_aligned_free(ptr, 0);
       },
   };
 };

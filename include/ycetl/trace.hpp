@@ -138,7 +138,7 @@ template <typename T> constexpr void *construct_in_place(char *memory) {
   return new (memory) T();
 }
 
-struct Trace {
+struct Trace : public object<Trace> {
 private:
   ycetl::object_pool<TraceMessage> *_messages = nullptr;
   // we need to store the constructors separately as we cannot serialize
@@ -258,9 +258,7 @@ constexpr static void store_one(TraceMessageCollector &collector,
                                 const T &value) {
 
   ConstructorFn constructor = &construct_in_place<T>;
-
   std::size_t constructor_index = collector.constructors.add(constructor);
-
   /*
   pack(ctor_slot, constructor_index);
 
