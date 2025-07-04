@@ -1,6 +1,8 @@
 {
   description = "Project using shared clang dev shell from GitHub";
 
+  inputs.clang-flake.url = "github:zokrezyl/yenv?dir=flakes/clang";
+
 
   outputs = { self, clang-flake }: {
     nixpkgs = clang-flake.nixpkgs;
