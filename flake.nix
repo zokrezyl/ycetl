@@ -1,7 +1,8 @@
 {
   description = "Clang + libc++ + CMake dev shell";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
+  #inputs.nixpkgs.url = "github:NixOS/nixpkgs";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
 
   outputs = { self, nixpkgs }: {
     devShells = {
@@ -17,6 +18,7 @@
             llvm.clang
             llvm.lld
             pkgs.cmake
+            pkgs.python314
           ];
         };
       };
