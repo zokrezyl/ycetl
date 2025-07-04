@@ -1,5 +1,25 @@
 {
   "nodes": {
+    "clang-flake": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "dir": "flakes/clang",
+        "lastModified": 1751625301,
+        "narHash": "sha256-fQ8G88LVLgQQXsqT+YoFSwm6kIlOwG6YbTA9Dh7x35M=",
+        "owner": "zokrezyl",
+        "repo": "yenv",
+        "rev": "0f7944c6c8ad5a0b2c8fafef666bbb488f00c21c",
+        "type": "github"
+      },
+      "original": {
+        "dir": "flakes/clang",
+        "owner": "zokrezyl",
+        "repo": "yenv",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1751479989,
@@ -18,7 +38,7 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "clang-flake": "clang-flake"
       }
     }
   },
