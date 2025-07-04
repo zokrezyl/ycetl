@@ -13,6 +13,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # disables -std=gnu++20, enforces -std=c++20
 
+add_compile_options(-stdlib=libc++)
+
 include(../cmake/CPM.cmake)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 

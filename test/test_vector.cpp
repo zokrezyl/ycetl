@@ -1,5 +1,5 @@
-#include <ycetl/vector.hpp>
-#include <ycetl/dynamic_allocator.hpp>
+//#include <ycetl/vector.hpp>
+//#include <ycetl/dynamic_allocator.hpp>
 #include <vector>
 
 
@@ -18,8 +18,12 @@ struct Test {
   int j;
 };
 
-int main() {
 
+
+int main() {
+  std::vector<int> std_int_vector;
+
+  /*
   ycetl::vector<int> ycetl_int_vector;
   ycetl_int_vector.push_back(42);
   ycetl_int_vector.push_back(100);
@@ -29,6 +33,8 @@ int main() {
   ycetl_test_vector.push_back({1, 2});
   ycetl_test_vector.push_back({3, 4});
   ycetl_test_vector.clear();
+  */
+  std::shared_ptr<Test> ptr = std::make_shared<Test>();
 
 
 }

@@ -6,6 +6,18 @@
 
 namespace ycetl {
 
+#if !__cpp_exceptions
+// Iff -fno-exceptions, transform error handling code to work without it.
+#define __ycetl_try if (true)
+#define __ycetl_catch(X) if (false)
+#define __ycetl_throw_exception_again
+#else
+// Else proceed normally.
+#define __ycetl_try try
+#define __ycetl_catch(X) catch (X)
+#define __ycetl_throw_exception_again throw
+#endif
+
 // we structure similarily to the C++ standard library's vector
 template <typename _Tp, typename _Alloc> struct _vector_base {
   typedef typename std::allocator_traits<_Alloc>::template rebind_alloc<_Tp>
@@ -66,7 +78,7 @@ protected:
       _AllocTraits::deallocate(_impl, __p, __n);
   }
 
-  void create_storage(size_t _n) {
+  void _create_storage(size_t _n) {
     this->_impl._start = this->_allocate(_n);
     this->_impl._finish = this->_impl._start;
     this->_impl._end_of_storage = this->_impl._start + _n;
@@ -81,9 +93,13 @@ public:
   }
 
   _vector_base(const allocator_type &__a) : _impl(__a) {}
-  _vector_base(size_t _n) : _impl() { create_storage(_n); }
+  _vector_base(size_t _n) : _impl() { _create_storage(_n); }
 
   _vector_base() : _impl() {};
+
+  constexpr _vector_base(size_t __n, const allocator_type &__a) : _impl(__a) {
+    _create_storage(__n);
+  }
 
   // layout
 public:
@@ -255,12 +271,13 @@ private:
   constexpr void _range_initialize(_InputIterator __first,
                                    _InputIterator __last,
                                    std::input_iterator_tag) {
-    try {
+    __ycetl_try {
       for (; __first != __last; ++__first)
         emplace_back(*__first);
-    } catch (...) {
+    }
+    __ycetl_catch(...) {
       clear();
-      throw;
+      __ycetl_throw_exception_again;
     }
   }
 
@@ -369,7 +386,7 @@ private:
     constexpr value_type &_val() noexcept { return _storage._val; }
 
   private:
-    constexpr _Tp *_ptr() noexcept { return std::__addressof(_storage._val); }
+    constexpr _Tp *_ptr() noexcept { return std::addressof(_storage._val); }
 
     union _Storage {
       constexpr _Storage() : _byte() {}
@@ -386,13 +403,14 @@ private:
   constexpr pointer _allocate_and_copy(size_type __n, _ForwardIterator __first,
                                        _ForwardIterator __last) {
     pointer __result = this->_allocate(__n);
-    try {
+    __ycetl_try {
       ycetl::memory::uninitialized_copy(__first, __last, __result,
                                         _get_tp_allocator());
       return __result;
-    } catch (...) {
+    }
+    __ycetl_catch(...) {
       _deallocate(__result, __n);
-      throw;
+      __throw_exception_again;
     }
   }
 };
@@ -406,7 +424,7 @@ constexpr void vector<_Tp, _Alloc>::_realloc_insert(iterator __position,
   const size_type __elems_before = __position - begin();
   pointer __new_start(this->_allocate(__len));
   pointer __new_finish(__new_start);
-  try {
+  __ycetl_try {
     // The order of the three operations is dictated by the C++11
     // case, where the moves could alter a new element belonging
     // to the existing vector.  This is an issue only for callers
@@ -433,7 +451,8 @@ constexpr void vector<_Tp, _Alloc>::_realloc_insert(iterator __position,
       __new_finish = std::__uninitialized_move_if_noexcept_a(
           __position.base(), __old_finish, __new_finish, _get_tp_allocator());
     }
-  } catch (...) {
+  }
+  __catch(...) {
     if (!__new_finish)
       _Alloc_traits::destroy(this->_impl, __new_start + __elems_before);
     else
@@ -476,12 +495,12 @@ constexpr void vector<_Tp, _Alloc>::_assign_aux(_ForwardIterator __first,
     _check_init_len(__len, _get_tp_allocator());
     pointer __tmp(_allocate_and_copy(__len, __first, __last));
     ycetl::memory::destroy_range_with_alloc(
-        this->_impl.start, this->_impl._finish, _get_tp_allocator());
+        this->_impl._start, this->_impl._finish, _get_tp_allocator());
     _deallocate(this->_impl._start,
                 this->_impl._end_of_storage - this->_impl._start);
-    this->impl._start = __tmp;
-    this->impl._finish = this->_impl._start + __len;
-    this->impl._end_of_storage = this->_impl._finish;
+    this->_impl._start = __tmp;
+    this->_impl._finish = this->_impl._start + __len;
+    this->_impl._end_of_storage = this->_impl._finish;
   } else if (size() >= __len)
     _erase_at_end(std::copy(__first, __last, this->_impl._start));
   else {
@@ -532,7 +551,7 @@ constexpr auto vector<_Tp, _Alloc>::_emplace_aux(const_iterator __position,
                                                  _Args &&...__args)
     -> iterator {
   const auto __n = __position - cbegin();
-  if (this->_M_impl._M_finish != this->_impl._end_of_storage)
+  if (this->_impl._finish != this->_impl._end_of_storage)
     if (__position == cend()) {
       _Alloc_traits::construct(this->_impl, this->_impl._finish,
                                std::forward<_Args>(__args)...);
