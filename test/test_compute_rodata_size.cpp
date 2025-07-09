@@ -58,9 +58,10 @@ constexpr auto test() {
 }
 
 int main() {
-    // Use the constexpr computation result
-    constexpr auto result = test();
-    constexpr auto& fib_sequence = result.first;
+    // Make the result static to ensure it has a constant address
+    static constexpr auto result = test();
+    
+    // Access the computed values (without references)
     constexpr int tenth_fib = result.second;
     
     // This static_assert verifies the computation happened at compile time
@@ -68,8 +69,8 @@ int main() {
     
     // Print the results (runtime, but computation was at compile time)
     std::cout << "Fibonacci sequence up to 1000 (computed at compile time):\n";
-    for (const auto& value : fib_sequence) {
-        std::cout << value << " ";
+    for (int i = 0; i < result.first.used_size(); ++i) {
+        std::cout << result.first.data[i] << " ";
     }
     std::cout << "\n\nThe 10th Fibonacci number is: " << tenth_fib << std::endl;
     
