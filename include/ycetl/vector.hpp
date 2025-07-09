@@ -1,8 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <ycetl/allocator.hpp>
 #include <ycetl/allocator_defs.hpp>
-#include <ycetl/dynamic_allocator.hpp>
 
 namespace ycetl {
 
@@ -64,7 +64,7 @@ template <typename _Tp, typename _Alloc> struct _vector_base {
   };
 
 protected:
-  pointer _allocate(size_t _n) {
+  constexpr pointer _allocate(size_t _n) {
     if (_n == 0) {
       return pointer();
     }
@@ -78,7 +78,7 @@ protected:
       _AllocTraits::deallocate(_impl, __p, __n);
   }
 
-  void _create_storage(size_t _n) {
+  constexpr void _create_storage(size_t _n) {
     this->_impl._start = this->_allocate(_n);
     this->_impl._finish = this->_impl._start;
     this->_impl._end_of_storage = this->_impl._start + _n;
@@ -86,16 +86,18 @@ protected:
 
 public:
   typedef _Alloc allocator_type;
-  _Tp_alloc_type &_get_tp_allocator() { return this->_impl; }
-  const _Tp_alloc_type &_get_tp_allocator() const { return this->_impl; }
-  allocator_type _get_allocator() const {
+  constexpr _Tp_alloc_type &_get_tp_allocator() { return this->_impl; }
+  constexpr const _Tp_alloc_type &_get_tp_allocator() const {
+    return this->_impl;
+  }
+  constexpr allocator_type _get_allocator() const {
     return allocator_type(_get_tp_allocator());
   }
 
-  _vector_base(const allocator_type &__a) : _impl(__a) {}
-  _vector_base(size_t _n) : _impl() { _create_storage(_n); }
+  constexpr _vector_base(const allocator_type &__a) : _impl(__a) {}
+  constexpr _vector_base(size_t _n) : _impl() { _create_storage(_n); }
 
-  _vector_base() : _impl() {};
+  constexpr _vector_base() : _impl() {};
 
   constexpr _vector_base(size_t __n, const allocator_type &__a) : _impl(__a) {
     _create_storage(__n);
@@ -106,11 +108,11 @@ public:
   _vector_impl _impl;
 };
 
-[[noreturn]] inline void __ycetl__throw_length_error(const char *msg) {
-  throw std::length_error(msg);
+constexpr inline void __ycetl__throw_length_error(const char *msg) {
+  // throw std::length_error(msg);
 }
 
-template <typename _Tp, typename _Alloc = ycetl::memory::dynamic_allocator<>>
+template <typename _Tp, typename _Alloc = ycetl::memory::allocator<_Tp>>
 class vector : public _vector_base<_Tp, _Alloc> {
 
   typedef _vector_base<_Tp, _Alloc> _Base;
@@ -162,8 +164,8 @@ public:
 
   constexpr vector(vector &&) noexcept = default;
 
-  vector(std::initializer_list<value_type> __l,
-         const allocator_type &__a = allocator_type())
+  constexpr vector(std::initializer_list<value_type> __l,
+                   const allocator_type &__a = allocator_type())
       : _Base(__a) {
 
     _range_initialize(__l.begin(), __l.end(),
@@ -178,7 +180,7 @@ public:
     _range_initialize(__first, __last, std::__iterator_category(__first));
   }
 
-  ~vector() noexcept {
+  constexpr ~vector() noexcept {
     ycetl::memory::destroy_range_with_alloc(
         this->_impl._start, this->_impl._finish, _get_tp_allocator());
   }

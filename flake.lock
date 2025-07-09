@@ -1,44 +1,24 @@
 {
   "nodes": {
-    "clang-flake": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "dir": "flakes/clang",
-        "lastModified": 1751625301,
-        "narHash": "sha256-fQ8G88LVLgQQXsqT+YoFSwm6kIlOwG6YbTA9Dh7x35M=",
-        "owner": "zokrezyl",
-        "repo": "yenv",
-        "rev": "0f7944c6c8ad5a0b2c8fafef666bbb488f00c21c",
-        "type": "github"
-      },
-      "original": {
-        "dir": "flakes/clang",
-        "owner": "zokrezyl",
-        "repo": "yenv",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1751479989,
-        "narHash": "sha256-M5KgdpVBVcW4HRVq9/OSRbrxlwsQ1ogEKqnvzsClDqU=",
+        "lastModified": 1751949589,
+        "narHash": "sha256-mgFxAPLWw0Kq+C8P3dRrZrOYEQXOtKuYVlo9xvPntt8=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "34627c90f062da515ea358360f448da57769236e",
+        "rev": "9b008d60392981ad674e04016d25619281550a9d",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixos-25.05",
+        "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "clang-flake": "clang-flake"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

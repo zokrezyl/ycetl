@@ -81,7 +81,7 @@ constexpr int test_vector(){
     ycetl::vector<int> v1;
     //std::vector<int> v2(allocator);
 
-    v1.reserve(max_elements); // reserves at least max_elements * sizeof(int) bytes
+    //v1.reserve(max_elements); // reserves at least max_elements * sizeof(int) bytes
 
     for (int n = 0; n < max_elements; ++n) 
         v1.push_back(n);

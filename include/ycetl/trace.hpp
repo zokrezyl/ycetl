@@ -13,7 +13,7 @@
 
 #include <ycetl/cstring.hpp>
 
-#include <ycetl/object_pool.hpp>
+#include <ycetl/vector.hpp>
 
 // simple constexpr execution tracer
 // simplest is to attache to the allocator
@@ -59,19 +59,6 @@ template <typename T> constexpr void pack(char *buffer, const T &value) {
     buffer[i] = bytes[i];
 }
 
-template <std::size_t N>
-constexpr void pack(char *buffer, const char (&value)[N]) {
-  std::size_t len = ycetl::strlen(value);
-  for (std::size_t i = 0; i < len; ++i) {
-    buffer[i] = value[i];
-  }
-}
-
-template <typename T>
-constexpr void pack(object_pool<char *> &dynamic_arena, const T &value) {
-  // pack(arena->allocate(safe_sizeof<T>()), value);
-}
-
 using ConstructorFn = void *(*)(char *);
 
 template <typename T> constexpr std::size_t get_serialized_size(const T &v) {
@@ -89,21 +76,22 @@ struct TraceMessageHeader {
   // to store the pointer is superfluous
 };
 
+/*
 struct TraceMessageCollector {
   using ConstructorFn = void *(*)(char *);
-  ycetl::object_pool<ConstructorFn> &constructors;
-  ycetl::object_pool<char *> buffer; // memory pool for the objects
+  //ycetl::object_pool<ConstructorFn> &constructors;
+  //ycetl::object_pool<char *> buffer; // memory pool for the objects
   //
   constexpr TraceMessageCollector(
       ycetl::object_pool<ConstructorFn> &constructors)
       : constructors(constructors), buffer() {}
 };
+*/
 
 struct TraceMessage {
   char *buffer = nullptr; // array of constructor indices
   size_t _size = 0;
-  ycetl::object_pool<ConstructorFn>
-      &constructors; // object pool for constructors
+  ycetl::vector<ConstructorFn> &constructors; // object pool for constructors
 
 public:
   constexpr TraceMessage(ycetl::object_pool<ConstructorFn> &constructors)
@@ -122,7 +110,7 @@ public:
       throw std::runtime_error("Failed to allocate memory for TraceMessage");
     }
 
-    TraceMessageCollector collector(constructors);
+    // TraceMessageCollector collector(constructors);
     (store_one(collector, std::forward<Args>(args)), ...);
   }
 
