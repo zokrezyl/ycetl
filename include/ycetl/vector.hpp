@@ -122,6 +122,9 @@ public:
   typedef _Tp value_type;
   typedef typename _Base::pointer pointer;
   typedef typename _Alloc_traits::const_pointer const_pointer;
+  typedef value_type &reference;
+  typedef const value_type &const_reference;
+
   typedef __gnu_cxx::__normal_iterator<pointer, vector> iterator;
   typedef __gnu_cxx::__normal_iterator<const_pointer, vector> const_iterator;
   typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
@@ -213,6 +216,8 @@ public:
 
   constexpr iterator begin() noexcept { return iterator(this->_impl._start); }
 
+  template <typename... _Args> reference emplace_back(_Args &&...__args);
+
   constexpr void push_back(const value_type &__x) {
     if (this->_impl._finish != this->_impl._end_of_storage) {
       _Alloc_traits::construct(_get_tp_allocator(), this->_impl._finish, __x);
@@ -232,6 +237,17 @@ public:
   constexpr void clear() noexcept { _erase_at_end(this->_impl._start); }
 
   constexpr iterator end() noexcept { return iterator(this->_impl._finish); }
+  constexpr const_iterator end() const noexcept {
+    return iterator(this->_impl._finish);
+  }
+
+  constexpr reference back() noexcept { return *(end() - 1); }
+
+  /**
+   *  Returns a read-only (constant) reference to the data at the
+   *  last element of the %vector.
+   */
+  constexpr const_reference back() const noexcept { return *(end() - 1); }
 
   [[__nodiscard__]] constexpr const_iterator cend() const noexcept {
     return const_iterator(this->_impl._finish);
@@ -243,6 +259,13 @@ public:
 
   constexpr iterator insert(const_iterator __position, value_type &&__x) {
     return _insert_rval(__position, std::move(__x));
+  }
+  constexpr reference operator[](size_type __n) noexcept {
+    return *(this->_impl._start + __n);
+  }
+
+  constexpr const_reference operator[](size_type __n) const noexcept {
+    return *(this->_impl._start + __n);
   }
 
 private:
@@ -290,7 +313,7 @@ private:
     this->_impl._start =
         this->_allocate(_check_init_len(__n, _get_tp_allocator()));
     this->_impl._end_of_storage = this->_impl._start + __n;
-    this->_impl._finish = std::uninitialized_copy(
+    this->_impl._finish = ycetl::memory::uninitialized_copy(
         __first, __last, this->_impl._start, _get_tp_allocator());
   }
 
@@ -581,6 +604,19 @@ constexpr void vector<_Tp, _Alloc>::_insert_aux(iterator __position,
   std::move_backward(__position.base(), this->_impl._finish - 2,
                      this->_impl._finish - 1);
   *__position = std::forward<_Arg>(__arg);
+}
+
+template <typename _Tp, typename _Alloc>
+template <typename... _Args>
+typename vector<_Tp, _Alloc>::reference
+vector<_Tp, _Alloc>::emplace_back(_Args &&...__args) {
+  if (this->_impl._finish != this->_impl._end_of_storage) {
+    _Alloc_traits::construct(this->_impl, this->_impl._finish,
+                             std::forward<_Args>(__args)...);
+    ++this->_impl._finish;
+  } else
+    _realloc_insert(end(), std::forward<_Args>(__args)...);
+  return back();
 }
 
 } // namespace ycetl
