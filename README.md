@@ -1,8 +1,6 @@
-Y Const Expression Template Library
-
 # The yce machine: A Comprehensive Guide
 
-**Document Date:** 2025-07-10 09:04:35  
+**Document Date:** 2025-07-10 09:19:11  
 **Author:** zokrezyl
 
 ## Introduction
@@ -83,7 +81,9 @@ using numeric_types = type_list<int, float, double, long>;
 
 ### multitype_handler
 
-The `multitype_handler` provides mechanisms to operate uniformly across different types, enabling the implementation of type-agnostic algorithms in the constexpr context. It uses template metaprogramming techniques to apply operations across the types in a `type_list`.
+The `multitype_handler` exists primarily to support the operations of `multitype_storage`. It provides mechanisms to operate uniformly across different types at compile-time, enabling type-safe operations within the constexpr context where traditional type erasure techniques are restricted.
+
+A crucial constraint in constexpr computation is that while casting to `void*` is theoretically possible, casting back from `void*` to a typed pointer (`static_cast<T*>`) is forbidden. This means standard type-erasure techniques that work at runtime fail in constexpr contexts.
 
 ```cpp
 template <template <typename> class Operation, typename TypeList>
@@ -91,17 +91,37 @@ struct multitype_handler;
 
 template <template <typename> class Operation, typename... Ts>
 struct multitype_handler<Operation, type_list<Ts...>> {
-    // Apply operation to each type
+    // Apply operation to each type in the type list
     using results = type_list<typename Operation<Ts>::type...>;
     
+    // Execute an operation on the appropriate type based on a type index
+    template <typename Func>
+    constexpr static void dispatch(size_t type_index, Func&& func) {
+        // Array of function pointers, one for each type
+        constexpr void (*dispatchers[])(Func&&) = {
+            [](Func&& f) { f.template operator()<Ts>(); }...
+        };
+        
+        // Call the appropriate function based on type_index
+        dispatchers[type_index](std::forward<Func>(func));
+    }
+    
     // Other utilities for handling multiple types
-    // ...
+    // e.g., type comparison, registration, etc.
 };
 ```
 
+The `multitype_handler` enables the yce machine to maintain type safety throughout the computation while still allowing for generic, type-agnostic algorithms to be implemented.
+
 ### multitype_storage
 
-The `multitype_storage` component addresses one of the most significant challenges in constexpr computation: storing and manipulating heterogeneous data at compile-time. It serves as the backbone of the working memory system, tracking allocations of different types throughout the computation chain and ensuring proper cleanup.
+The `multitype_storage` component is the cornerstone of the yce machine's memory management system. It provides a type-safe container for dynamically allocated heterogeneous data during constexpr computation.
+
+The critical insight behind `multitype_storage` is that **all possible types must be known before the computation begins**. This is a fundamental requirement because:
+
+1. Constexpr forbids recovery of type information from type-erased pointers (e.g., `static_cast` from `void*`)
+2. Without the ability to recover types, we cannot manage the memory correctly at the end of computation
+3. We need a mechanism to serialize the final data structure into the result memory
 
 ```cpp
 template <typename TypeList>
@@ -111,34 +131,63 @@ template <typename... Ts>
 class multitype_storage<type_list<Ts...>> {
     // Storage for each type in the list
     std::tuple<std::vector<Ts>...> type_storage;
+    
+    // Type ID mapping to help with lookup
+    template <typename T>
+    constexpr static size_t type_id = /* implementation */;
 
 public:
+    // Allocate an object of type T
     template <typename T>
     constexpr T* allocate() {
-        // Allocate an object of type T and track it
-        auto& storage = get_storage<T>();
-        storage.push_back(T{});
+        static_assert((std::is_same_v<T, Ts> || ...), 
+            "Type T must be in the TypeList");
+            
+        auto& storage = std::get<std::vector<T>>(type_storage);
+        storage.emplace_back();
         return &storage.back();
     }
     
-    template <typename T>
-    constexpr void deallocate(T* ptr) {
-        // Find and deallocate the object
-        // (simplified - actual implementation is more complex)
+    // Allocate and initialize
+    template <typename T, typename... Args>
+    constexpr T* construct(Args&&... args) {
+        auto& storage = std::get<std::vector<T>>(type_storage);
+        storage.emplace_back(std::forward<Args>(args)...);
+        return &storage.back();
     }
     
-    // Clean up all allocations when storage goes out of scope
-    constexpr ~multitype_storage() {
-        // Automatic cleanup - critical for constexpr compliance
+    // Access objects by type and index
+    template <typename T>
+    constexpr T& get(size_t index) {
+        return std::get<std::vector<T>>(type_storage)[index];
+    }
+    
+    // Traverse all objects of all types for serialization
+    template <typename Visitor>
+    constexpr void visit_all(Visitor&& visitor) {
+        // For each type in the tuple
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            // Visit each vector in the tuple
+            (visit_vector<std::tuple_element_t<Is, std::tuple<std::vector<Ts>...>>>(
+                std::get<Is>(type_storage), visitor
+            ), ...);
+        }(std::make_index_sequence<sizeof...(Ts)>{});
     }
     
 private:
-    template <typename T>
-    constexpr auto& get_storage() {
-        return std::get<std::vector<T>>(type_storage);
+    // Visit all elements in a vector
+    template <typename Vector, typename Visitor>
+    constexpr void visit_vector(Vector& vec, Visitor&& visitor) {
+        for (auto& item : vec) {
+            visitor(item);
+        }
     }
 };
 ```
+
+The requirement to know all types in advance forces a disciplined approach to constexpr computation design, where the type universe must be explicitly defined. This seeming limitation actually enables the yce machine's powerful capabilities by ensuring that all working memory can be properly managed and that the final results can be extracted and serialized into the result memory.
+
+During the actual computation, the working memory managed by `multitype_storage` allows for complex data structures to be built and manipulated, while the explicit type tracking ensures that this data can be properly serialized into the compact, type-specific representation in the result memory.
 
 ## Serialization
 
