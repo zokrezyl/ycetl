@@ -5,10 +5,10 @@
 namespace ycetl {
 namespace memory {
 
-template <template <typename> class StorageBackend, typename... Types>
-class multitype_storage : public multitype_handler<StorageBackend, type_set<Types...>> {
+template <template <typename> class StorageBackend, typename TypeSet>
+class multitype_storage : public multitype_handler<StorageBackend, TypeSet> {
 public:
-  using multitype_handler<StorageBackend, type_set<Types...>>::multitype_handler;
+  using multitype_handler<StorageBackend, TypeSet>::multitype_handler;
 
   // Single object allocation
   template <typename T>

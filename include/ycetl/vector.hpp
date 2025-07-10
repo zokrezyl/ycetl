@@ -1,8 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <ycetl/allocator.hpp>
-#include <ycetl/allocator_defs.hpp>
+#include <ycetl/memory.hpp>
 
 namespace ycetl {
 
@@ -112,7 +111,7 @@ constexpr inline void __ycetl__throw_length_error(const char *msg) {
   // throw std::length_error(msg);
 }
 
-template <typename _Tp, typename _Alloc = ycetl::memory::allocator<_Tp>>
+template <typename _Tp, typename _Alloc>
 class vector : public _vector_base<_Tp, _Alloc> {
 
   typedef _vector_base<_Tp, _Alloc> _Base;
@@ -454,14 +453,14 @@ constexpr void vector<_Tp, _Alloc>::_realloc_insert(iterator __position,
           __position.base(), __old_finish, __new_finish, _get_tp_allocator());
     }
   }
-  __catch(...) {
+  __ycetl_catch(...) {
     if (!__new_finish)
       _Alloc_traits::destroy(this->_impl, __new_start + __elems_before);
     else
       ycetl::memory::destroy_range_with_alloc(__new_start, __new_finish,
                                               _get_tp_allocator());
     _deallocate(__new_start, __len);
-    __throw_exception_again;
+    __ycetl_throw_exception_again;
   }
   if constexpr (!_use_relocate())
     std::_Destroy(__old_start, __old_finish, _get_tp_allocator());
@@ -563,7 +562,7 @@ constexpr auto vector<_Tp, _Alloc>::_emplace_aux(const_iterator __position,
       // could alias one of the elements of the container and so we
       // need to use it before _M_insert_aux moves elements around.
       _temporary_value __tmp(this, std::forward<_Args>(__args)...);
-      _insert_aux(begin() + __n, std::move(__tmp._M_val()));
+      _insert_aux(begin() + __n, std::move(__tmp._val()));
     }
   else
     _realloc_insert(begin() + __n, std::forward<_Args>(__args)...);

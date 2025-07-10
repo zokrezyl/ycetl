@@ -1,4 +1,5 @@
 #pragma once
+#include <tuple>
 
 namespace ycetl {
 
@@ -31,11 +32,11 @@ public:
 
   // Access handler for a specific type
   template <typename T> constexpr HandlerImpl<T> &get_handler() {
-    return std::get<HandlerImpl<T>>(handlers_);
+    return std::get<HandlerImpl<T>>(_handlers);
   }
 
   template <typename T> constexpr const HandlerImpl<T> &get_handler() const {
-    return std::get<HandlerImpl<T>>(handlers_);
+    return std::get<HandlerImpl<T>>(_handlers);
   }
 };
 
