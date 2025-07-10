@@ -35,19 +35,31 @@ suite vector_suite = [] {
     expect(test());
   };
 
-  "constructed_with_capacity"_test = [] {
+  "vector_with_size"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> v(8, alloc);
+      vector<int, decltype(alloc)> v(
+          8, alloc); // Creates 8 default-initialized elements
+      return v.size() == 8_u && v.capacity() >= 8_u;
+    };
+    expect(test());
+  };
+
+  "vector_with_reserve"_test = [] {
+    constexpr auto test = [] {
+      MAKE_TEST_ALLOCATOR(int);
+      vector<int, decltype(alloc)> v(alloc);
+      v.reserve(8);
       return v.size() == 0_u && v.capacity() == 8_u;
     };
     expect(test());
   };
 
-  "fill_exact_capacity"_test = [] {
+  "fill_capacity"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> p(4, alloc);
+      vector<int, decltype(alloc)> p(alloc);
+      p.reserve(4); // Reserve space first
       for (int i = 0; i < 4; ++i)
         p.push_back(i);
       return p.size() == 4_u && p[3] == 3_i;
@@ -58,7 +70,8 @@ suite vector_suite = [] {
   "fill_100"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> p(100, alloc);
+      vector<int, decltype(alloc)> p(alloc);
+      p.reserve(100); // Reserve space first
       for (int i = 0; i < 100; ++i)
         p.push_back(i);
       return p.size() == 100_u && p[99] == 99_i;
@@ -66,10 +79,21 @@ suite vector_suite = [] {
     expect(test());
   };
 
+  "fill_with_value"_test = [] {
+    constexpr auto test = [] {
+      MAKE_TEST_ALLOCATOR(int);
+      // This is the constructor that fills with a value: vector(size, value,
+      // allocator)
+      vector<int, decltype(alloc)> v(5, 42, alloc);
+      return v.size() == 5_u && v[0] == 42_i && v[4] == 42_i;
+    };
+    expect(test());
+  };
+
   "copy_construct"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> a(3, alloc);
+      vector<int, decltype(alloc)> a(alloc);
       a.push_back(10);
       a.push_back(20);
       a.push_back(30);
@@ -82,7 +106,7 @@ suite vector_suite = [] {
   "move_construct"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> a(2, alloc);
+      vector<int, decltype(alloc)> a(alloc);
       a.push_back(7);
       a.push_back(8);
       vector<int, decltype(alloc)> b = std::move(a);
@@ -94,7 +118,7 @@ suite vector_suite = [] {
   "clear_and_reuse"_test = [] {
     constexpr auto test = [] {
       MAKE_TEST_ALLOCATOR(int);
-      vector<int, decltype(alloc)> v(5, alloc);
+      vector<int, decltype(alloc)> v(alloc);
       v.push_back(1);
       v.push_back(2);
       v.clear();

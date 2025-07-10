@@ -154,7 +154,7 @@ public:
   constexpr vector(size_type __n, const value_type &__value,
                    const allocator_type &__a = allocator_type())
       : _Base(_check_init_len(__n, __a), __a) {
-    _default_initialize(__n);
+    _fill_initialize(__n, __value);
   }
 
   constexpr vector(const vector &__x)
@@ -183,8 +183,8 @@ public:
   }
 
   constexpr ~vector() noexcept {
-    ycetl::memory::destroy_range_with_alloc(
-        this->_impl._start, this->_impl._finish, _get_tp_allocator());
+    ycetl::memory::destroy(this->_impl._start, this->_impl._finish,
+                           _get_tp_allocator());
   }
 
   constexpr vector &operator=(const vector &__x) noexcept(
@@ -221,6 +221,7 @@ public:
   constexpr void push_back(const value_type &__x) {
     if (this->_impl._finish != this->_impl._end_of_storage) {
       _Alloc_traits::construct(_get_tp_allocator(), this->_impl._finish, __x);
+      ++this->_impl._finish;
     } else {
       _realloc_insert(end(), __x);
     }
@@ -240,6 +241,8 @@ public:
   constexpr const_iterator end() const noexcept {
     return iterator(this->_impl._finish);
   }
+
+  constexpr void reserve(size_type __n);
 
   constexpr reference back() noexcept { return *(end() - 1); }
 
@@ -269,9 +272,14 @@ public:
   }
 
 private:
-  void _default_initialize(size_type __n) {
+  constexpr void _default_initialize(size_type __n) {
     this->_impl._finish = std::__uninitialized_default_n_a(
         this->_impl._start, __n, _get_tp_allocator());
+  }
+
+  constexpr void _fill_initialize(size_type __n, const value_type &__value) {
+    this->_impl._finish = std::__uninitialized_fill_n_a(
+        this->_impl._start, __n, __value, _get_tp_allocator());
   }
 
   static constexpr size_type _check_init_len(size_type __n,
@@ -285,8 +293,7 @@ private:
 
   constexpr void _erase_at_end(pointer __pos) noexcept {
     if (size_type __n = this->_impl._finish - __pos) {
-      ycetl::memory::destroy_range_with_alloc(__pos, this->_impl._finish,
-                                              _get_tp_allocator());
+      ycetl::memory::destroy(__pos, this->_impl._finish, _get_tp_allocator());
       this->_impl._finish = __pos;
     }
   }
@@ -480,13 +487,12 @@ constexpr void vector<_Tp, _Alloc>::_realloc_insert(iterator __position,
     if (!__new_finish)
       _Alloc_traits::destroy(this->_impl, __new_start + __elems_before);
     else
-      ycetl::memory::destroy_range_with_alloc(__new_start, __new_finish,
-                                              _get_tp_allocator());
+      ycetl::memory::destroy(__new_start, __new_finish, _get_tp_allocator());
     _deallocate(__new_start, __len);
     __ycetl_throw_exception_again;
   }
   if constexpr (!_use_relocate())
-    std::_Destroy(__old_start, __old_finish, _get_tp_allocator());
+    std::destroy(__old_start, __old_finish, _get_tp_allocator());
   _deallocate(__old_start, this->_impl._end_of_storage - __old_start);
   this->_impl._start = __new_start;
   this->_impl._finish = __new_finish;
@@ -518,8 +524,8 @@ constexpr void vector<_Tp, _Alloc>::_assign_aux(_ForwardIterator __first,
   if (__len > capacity()) {
     _check_init_len(__len, _get_tp_allocator());
     pointer __tmp(_allocate_and_copy(__len, __first, __last));
-    ycetl::memory::destroy_range_with_alloc(
-        this->_impl._start, this->_impl._finish, _get_tp_allocator());
+    ycetl::memory::destroy(this->_impl._start, this->_impl._finish,
+                           _get_tp_allocator());
     _deallocate(this->_impl._start,
                 this->_impl._end_of_storage - this->_impl._start);
     this->_impl._start = __tmp;
@@ -617,6 +623,37 @@ vector<_Tp, _Alloc>::emplace_back(_Args &&...__args) {
   } else
     _realloc_insert(end(), std::forward<_Args>(__args)...);
   return back();
+}
+
+template <typename _Tp, typename _Alloc>
+constexpr void vector<_Tp, _Alloc>::reserve(size_type __n) {
+  if (__n > this->max_size())
+    throw std::length_error("vector::reserve");
+
+  if (this->capacity() < __n) {
+    const size_type __old_size = size();
+    pointer __tmp;
+
+    // Simple approach for constexpr - use allocate and copy
+    __tmp = this->_allocate(__n);
+
+    // Move elements to new storage
+    ycetl::memory::uninitialized_move_if_noexcept(
+        this->_impl._start, this->_impl._finish, __tmp, _get_tp_allocator());
+
+    // Destroy old elements
+    ycetl::memory::destroy(this->_impl._start, this->_impl._finish,
+                           _get_tp_allocator());
+
+    // Deallocate old storage
+    this->_deallocate(this->_impl._start,
+                      this->_impl._end_of_storage - this->_impl._start);
+
+    // Update pointers
+    this->_impl._start = __tmp;
+    this->_impl._finish = __tmp + __old_size;
+    this->_impl._end_of_storage = this->_impl._start + __n;
+  }
 }
 
 } // namespace ycetl
