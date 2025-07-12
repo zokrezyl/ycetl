@@ -4,7 +4,7 @@
 namespace yectl {
 
 template <typename CharT, typename Traits = std::char_traits<CharT>,
-          typename Allocator = default_allocator<CharT>>
+          typename Allocator = ycetl::default_allocator<CharT>>
 class string {
 public
   /* define all nested types */

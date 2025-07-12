@@ -48,6 +48,16 @@ public:
       construct(i, *(first + i));
   }
 
+  /* 1. copy‑construct from another dynamic_array using the same allocator */
+  template <class Alloc>
+  constexpr dynamic_array(Alloc &a, const dynamic_array &other)
+      : dynamic_array(a, other.begin(), other.size()) {}
+
+  /* 2. construct from initializer_list */
+  template <class Alloc>
+  constexpr dynamic_array(Alloc &a, std::initializer_list<T> il)
+      : dynamic_array(a, il.begin(), il.size()) {}
+
   /* move semantics ------------------------------------------------------- */
   constexpr dynamic_array(dynamic_array &&other) noexcept
       : _data(std::exchange(other._data, nullptr)),

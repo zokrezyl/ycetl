@@ -1,15 +1,33 @@
+/*──────────────────────────────────────────────────────────────────────────────
+  ycetl/vector.hpp   ―  constexpr‑friendly vector with allocator ownership
+  This version
+  ● stores its allocator behind an owned_pointer<T>
+  ● creates a default_allocator<T> when default‑constructed
+  ● supports nested vectors (operator[] returns a non‑owning wrapper)
+  ● provides STL‑equivalent constructor set
+  ● iterator is a thin pointer adapter that builds the wrapper on *
+──────────────────────────────────────────────────────────────────────────────*/
 #pragma once
+
+#include <compare>
+#include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <type_traits>
 #include <utility>
+
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/memory.hpp>
+#include <ycetl/memory.hpp> // owned_pointer, default_allocator, allocate
 
 namespace ycetl {
 
-template <class T, class Alloc> class vector;
+/* Forward decl so allocation_type_of can see it */
+template <class T, class Allocator> class vector;
+/*──────────────── helper traits ─────────────────────────────────────────────*/
+template <class> struct is_vector : std::false_type {};
+template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
-/* allocation_type_of for nested vectors */
+/* Map “container T” ➜ “storage element type” */
 template <class T> struct allocation_type_of {
   using type = T;
 };
@@ -21,49 +39,42 @@ template <class T, class A> struct allocation_type_of<vector<T, A>> {
 template <class T>
 using allocation_type_of_t = typename allocation_type_of<T>::type;
 
-template <typename> struct is_vector : std::false_type {};
-template <typename U, typename A>
-struct is_vector<vector<U, A>> : std::true_type {};
-
-// ── iterator template
-// ------------------------------------------------------------
+/*──────────────── iterator adapter ─────────────────────────────────────────*/
 template <class T, class Allocator, bool Const> class vector_iterator {
   using storage_elem = allocation_type_of_t<T>;
   using raw_ptr =
       std::conditional_t<Const, const storage_elem *, storage_elem *>;
-  raw_ptr _ptr = nullptr;      // points into dynamic_array buffer
-  Allocator *_alloc = nullptr; // points to outer allocator
+
+  raw_ptr _ptr = nullptr;
+  Allocator *_alloc = nullptr;
 
 public:
   using iterator_category = std::random_access_iterator_tag;
   using value_type = std::conditional_t<Const, const T, T>;
   using difference_type = std::ptrdiff_t;
-  using pointer = void;         // not provided
-  using reference = value_type; // we return by value
+  using reference = value_type; // return by value
 
-  // constructors --------------------------------------------------------
   constexpr vector_iterator() = default;
   constexpr vector_iterator(raw_ptr p, Allocator *a) : _ptr(p), _alloc(a) {}
 
-  // implicit conversion  iterator -> const_iterator
+  /* implicit non‑const ➜ const conversion */
   template <bool C = Const, typename = std::enable_if_t<!C>>
   constexpr operator vector_iterator<T, Allocator, true>() const {
     return {_ptr, _alloc};
   }
 
-  // dereference ---------------------------------------------------------
+  /* dereference builds wrapper when T is itself a vector */
   constexpr value_type operator*() const {
-    if constexpr (is_vector<T>::value) {
-      return T(*_alloc, const_cast<storage_elem &>(*_ptr)); // wrapper
-    } else {
-      return *_ptr; // element copy
-    }
+    if constexpr (is_vector<T>::value)
+      return T(*_alloc, const_cast<storage_elem &>(*_ptr));
+    else
+      return *_ptr;
   }
   constexpr value_type operator[](difference_type n) const {
     return *(*this + n);
   }
 
-  // pointer arithmetic --------------------------------------------------
+  /* pointer arithmetic */
   constexpr vector_iterator &operator++() {
     ++_ptr;
     return *this;
@@ -82,7 +93,6 @@ public:
     --*this;
     return t;
   }
-
   constexpr vector_iterator &operator+=(difference_type n) {
     _ptr += n;
     return *this;
@@ -91,7 +101,6 @@ public:
     _ptr -= n;
     return *this;
   }
-
   friend constexpr vector_iterator operator+(vector_iterator it,
                                              difference_type n) {
     it += n;
@@ -112,7 +121,7 @@ public:
     return l._ptr - r._ptr;
   }
 
-  // comparisons ---------------------------------------------------------
+  /* comparisons */
   friend constexpr bool operator==(vector_iterator l, vector_iterator r) {
     return l._ptr == r._ptr;
   }
@@ -121,186 +130,124 @@ public:
   }
 };
 
-// ── convenient aliases ---------------------------------------------------
-template <class T, class Alloc>
-using vec_iter = vector_iterator<T, Alloc, false>;
-template <class T, class Alloc>
-using vec_citer = vector_iterator<T, Alloc, true>;
+/* convenient aliases */
+template <class T, class A> using vec_iter = vector_iterator<T, A, false>;
+template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 
-/* --------------------------------------------------------------------- */
-// TODO: deduce Allocator = ycetl::default_allocator<defuce<alloccator<T>>
-template <class T, class Allocator> class vector {
+/*──────────────────────────── vector class ─────────────────────────────────*/
+template <class T, class Allocator = default_allocator<T>> class vector {
   using storage_type = allocation_type_of_t<vector<T, Allocator>>;
 
-private:
-  Allocator _alloc;
-  ycetl::owned_pointer<storage_type> _storage;
+  owned_pointer<Allocator> _alloc_ptr;  // may own or alias
+  owned_pointer<storage_type> _storage; // always owns its buffer
 
-private:
-  // this special constructor is used to create a vector used with operator []
-#if 0
-  constexpr vector(typename allocation_type_of_t<vector>::type &inner,
-                   Allocator &alloc)
-      : _alloc(alloc), _storage(&inner) {}
-#endif
+  /* handy accessors */
+  constexpr Allocator &alloc() { return *_alloc_ptr; }
+  constexpr const Allocator &alloc() const { return *_alloc_ptr; }
 
 public:
   using value_type = T;
   using size_type = std::size_t;
-  using reference = T &;
-  using const_reference = const T &;
   using iterator = vec_iter<T, Allocator>;
   using const_iterator = vec_citer<T, Allocator>;
 
-  /* ---------------------------------------------------------------------- */
-  /* 1. default                                                             */
-  constexpr vector() // (1)
-      : _alloc(), _storage() {}
+  /*──────── constructors (STL parity) ──────────────────────────*/
+  constexpr vector() : _alloc_ptr(), _storage() {}
+  explicit constexpr vector(Allocator &a) : _alloc_ptr(&a), _storage() {}
 
-  explicit constexpr vector(const Allocator &alloc) // (2)
-      : _alloc(alloc), _storage() {}
+  constexpr vector(size_type n, const T &v)
+      : _alloc_ptr(), _storage(alloc(), n, v) {}
+  constexpr vector(size_type n, const T &v, Allocator &a)
+      : _alloc_ptr(&a), _storage(alloc(), n, v) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* 2. size + value                                                        */
-  constexpr vector(size_type n, const T &value) // (3)
-      : _alloc(), _storage(_alloc, n, value) {}
+  explicit constexpr vector(size_type n) : _alloc_ptr(), _storage(alloc(), n) {}
+  constexpr vector(size_type n, Allocator &a)
+      : _alloc_ptr(&a), _storage(alloc(), n) {}
 
-  constexpr vector(size_type n, const T &value,
-                   const Allocator &alloc) // (4)
-      : _alloc(alloc), _storage(_alloc, n, value) {}
+  constexpr vector(std::initializer_list<T> il)
+      : _alloc_ptr(), _storage(alloc(), il) {}
+  constexpr vector(std::initializer_list<T> il, Allocator &a)
+      : _alloc_ptr(&a), _storage(alloc(), il) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* 3. size only (value‑initialised)                                       */
-  explicit constexpr vector(size_type n) // (5)
-      : _alloc(), _storage(_alloc, n) {}
-
-  constexpr vector(size_type n, const Allocator &alloc) // (6)
-      : _alloc(alloc), _storage(_alloc, n) {}
-
-  /* ---------------------------------------------------------------------- */
-  /* 4. range [first,last)                                                  */
-  template <class InputIt,
-            typename = std::enable_if_t<!std::is_integral_v<InputIt>>>
-  constexpr vector(InputIt first, InputIt last) // (7)
-      : _alloc(), _storage(_alloc, first,
-                           static_cast<size_type>(std::distance(first, last))) {
-  }
-
-  template <class InputIt,
-            typename = std::enable_if_t<!std::is_integral_v<InputIt>>,
-            typename = void>
-  constexpr vector(InputIt first, InputIt last,
-                   const Allocator &alloc) // (8)
-      : _alloc(alloc),
-        _storage(_alloc, first,
+  template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>>
+  constexpr vector(It first, It last)
+      : _alloc_ptr(),
+        _storage(alloc(), first,
                  static_cast<size_type>(std::distance(first, last))) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* 5. initializer‑list                                                    */
-  constexpr vector(std::initializer_list<T> il) // (9)
-      : _alloc(), _storage(_alloc, il) {}
+  template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>,
+            typename = void>
+  constexpr vector(It first, It last, Allocator &a)
+      : _alloc_ptr(&a),
+        _storage(alloc(), first,
+                 static_cast<size_type>(std::distance(first, last))) {}
 
-  constexpr vector(std::initializer_list<T> il,
-                   const Allocator &alloc) // (10)
-      : _alloc(alloc), _storage(_alloc, il) {}
+  constexpr vector(const vector &other)
+      : _alloc_ptr(), _storage(alloc(), *other._storage) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* 6. copy                                                                */
-  constexpr vector(const vector &other) // (11)
-      : _alloc(other._alloc), _storage(_alloc, *other._storage.get()) {}
+  constexpr vector(const vector &other, Allocator &a)
+      : _alloc_ptr(&a), _storage(alloc(), *other._storage) {}
 
-  constexpr vector(const vector &other,
-                   const Allocator &alloc) // (12)
-      : _alloc(alloc), _storage(_alloc, *other._storage.get()) {}
+  constexpr vector(vector &&other) noexcept
+      : _alloc_ptr(std::move(other._alloc_ptr)),
+        _storage(std::move(other._storage)) {}
 
-  /* ---------------------------------------------------------------------- */
-  /* 7. move                                                                */
-  constexpr vector(vector &&other) noexcept // (13)
-      : _alloc(std::move(other._alloc)), _storage(std::move(other._storage)) {}
-
-  constexpr vector(vector &&other,
-                   const Allocator &alloc) // (14)
-      : _alloc(alloc), _storage(std::move(other._storage)) {}
-
-  constexpr vector &operator=(const vector &other) {
-    if (this != &other) {
-      clear();
-      reserve(other.size());
-      for (const auto &x : other)
-        push_back(x);
-    }
-    return *this;
-  }
-
-  constexpr vector &operator=(vector &&other) noexcept {
-    _storage = std::move(other._storage);
-    _alloc = std::move(other._alloc);
-    other._storage = {};
-    return *this;
+  constexpr vector(vector &&other, Allocator &a) : _alloc_ptr(&a), _storage() {
+    reserve(other.size());
+    for (auto &e : *other._storage)
+      _storage->push_back(std::move(e), alloc());
+    other.clear();
   }
 
   constexpr ~vector() = default;
 
-  /* capacity ---------------------------------------------------------- */
+  /*──────── capacity ───────────────────────────────────────────*/
   constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _storage.get()->size(); }
-  constexpr size_type capacity() const noexcept {
-    return _storage.get()->capacity();
-  }
+  constexpr size_type size() const noexcept { return _storage->size(); }
+  constexpr size_type capacity() const noexcept { return _storage->capacity(); }
 
-  constexpr void reserve(size_type c) { _storage.get()->reserve(_alloc, c); }
-  constexpr void resize(size_type n) { _storage.get()->resize(_alloc, n); }
-  constexpr void clear() { _storage.get()->clear(); }
+  constexpr void reserve(size_type n) { _storage->reserve(alloc(), n); }
+  constexpr void resize(size_type n) { _storage->resize(alloc(), n); }
+  constexpr void clear() { _storage->clear(); }
 
-  // ─── non‑const ───────────────────────────────────────────────────────────
+  /*──────── element access ─────────────────────────────────────*/
   constexpr T operator[](size_type i) {
-    if constexpr (is_vector<T>::value) {
-      auto &inner = _storage.get()->operator[](i); // dynamic_array<...>&
-      return T(_alloc, inner);                     // non‑owning wrapper
-    } else {
-      return _storage.get()->operator[](i); // copy of element
-    }
+    if constexpr (is_vector<T>::value)
+      return T(alloc(), (*_storage)[i]);
+    else
+      return (*_storage)[i];
   }
-
-  // ─── const ‑ access (read‑only) ──────────────────────────────────────────
   constexpr const T operator[](size_type i) const {
-    if constexpr (is_vector<T>::value) {
-      auto &inner = _storage.get()->operator[](i);
-      return T(_alloc, inner); // wrapper (read‑only use)
-    } else {
-      return _storage.get()->operator[](i); // copy, but const
-    }
+    if constexpr (is_vector<T>::value)
+      return T(alloc(), (*_storage)[i]);
+    else
+      return (*_storage)[i];
   }
 
-  constexpr reference front() { return _storage[0]; }
-  constexpr const_reference front() const { return _storage[0]; }
-
-  constexpr reference back() { return _storage[size() - 1]; }
-  constexpr const_reference back() const { return _storage[size() - 1]; }
-
-  /* modifiers --------------------------------------------------------- */
-  constexpr void push_back(const T &v) { _storage.get()->push_back(v, _alloc); }
+  /*──────── modifiers ─────────────────────────────────────────*/
+  constexpr void push_back(const T &v) { _storage->push_back(v, alloc()); }
   constexpr void push_back(T &&v) {
-    _storage.get()->push_back(std::move(v), _alloc);
+    _storage->push_back(std::move(v), alloc());
   }
 
-  template <class... Args> constexpr reference emplace_back(Args &&...args) {
-    return *_storage.get()->emplace_back(_alloc, std::forward<Args>(args)...);
+  template <class... Args> constexpr T &emplace_back(Args &&...args) {
+    return *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
   }
 
-  constexpr void pop_back() { _storage.get()->pop_back(); }
+  constexpr void pop_back() { _storage->pop_back(); }
 
+  /*──────── iterators ─────────────────────────────────────────*/
   constexpr iterator begin() noexcept {
-    return iterator(_storage->data(), _alloc);
+    return iterator(_storage->begin(), &alloc());
   }
   constexpr iterator end() noexcept {
-    return iterator(_storage->data() + size(), _alloc);
+    return iterator(_storage->end(), &alloc());
   }
   constexpr const_iterator begin() const noexcept {
-    return const_iterator(_storage->data(), _alloc);
+    return const_iterator(_storage->begin(), &alloc());
   }
   constexpr const_iterator end() const noexcept {
-    return const_iterator(_storage->data() + size(), _alloc);
+    return const_iterator(_storage->end(), &alloc());
   }
 };
 

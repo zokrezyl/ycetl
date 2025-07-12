@@ -1,0 +1,11 @@
+errors.err
+CMakeFiles/
+CMakeCache.txt
+Makefile
+.cache/
+_deps/
+.clangd
+.clang-format
+build.ninja
+cmake_install.cmake
+compile_commands.json

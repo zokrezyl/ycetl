@@ -1,0 +1,6 @@
+#pragma once
+
+namespace ycetl {
+template <typename T, typename Allocator> class deque {};
+
+} // namespace ycetl

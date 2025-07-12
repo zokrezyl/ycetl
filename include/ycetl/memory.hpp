@@ -29,6 +29,9 @@ public:
   constexpr const T *get() const { return _ptr; }
   constexpr T &operator*() { return *_ptr; }
   constexpr const T &operator*() const { return *_ptr; }
+
+  constexpr T *operator->() { return _ptr; }
+  constexpr const T *operator->() const { return _ptr; }
 };
 
 template <typename T, typename MultitypeAllocator>
