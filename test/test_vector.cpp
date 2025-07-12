@@ -1,7 +1,7 @@
 #include <ycetl/vector.hpp>
-#include <ycetl/multitype.hpp>
-#include <ycetl/impl/multitype_storage.hpp>
-#include <ycetl/impl/dynamic_storage.hpp>
+#include <ycetl/impl/multitype.hpp>
+#include <ycetl/impl/multitype_allocator.hpp>
+#include <ycetl/impl/dynamic_allocator.hpp>
 #include <ycetl/impl/allocator.hpp>
 //#include <ycetl/dynamic_allocator.hpp>
 #include <vector>
@@ -15,9 +15,7 @@ struct Test {
 
 constexpr int test (){
   using working_type_set = ycetl::type_set<int, double, char, Test>;
-  auto storage = ycetl::memory::multitype_storage<ycetl::memory::dynamic_storage, working_type_set>();
-
-  auto allocator = ycetl::allocator::allocator<int, decltype(storage)>(storage);
+  auto allocator = ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator, working_type_set>();
 
   using allocator_type = decltype(allocator);
 

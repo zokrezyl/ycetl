@@ -1,9 +1,8 @@
 #pragma once
 #include <tuple>
+#include <ycetl/types.hpp>
 
 namespace ycetl {
-
-template <typename... Ts> struct type_set {};
 
 /*
 The `multitype_handler` exists primarily to support the operations of
