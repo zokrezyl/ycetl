@@ -5,6 +5,15 @@
 
 namespace ycetl {
 
+/**
+ * @brief Concept for types that define a `relevant_of` member type.
+ *
+ * This concept is satisfied if the type `T` provides a nested type alias
+ * named `relevant_of`, which is used to derive the relevant (backend) type.
+ */
+template <typename T>
+concept has_relevant_of = requires { typename T::relevant_of; };
+
 //===----------------------------------------------------------------------===//
 // type_set and utilities
 //===----------------------------------------------------------------------===//
@@ -79,8 +88,6 @@ public:
 
 template <typename T> using relevant_types_t = typename relevant_types<T>::type;
 
-namespace ycetl {
-
 /**
  * @brief Forces compile-time resolution of relevant types from a type_set.
  *
@@ -97,10 +104,8 @@ namespace ycetl {
  * (unused).
  */
 template <typename T>
-consteval auto make_relevant_types() -> relevant_types_t<T> {
+consteval auto test_relevant_types() -> relevant_types_t<T> {
   return {};
 }
-
-} // namespace ycetl
 
 } // namespace ycetl

@@ -127,12 +127,20 @@ public:
     return _data + _size++;
   }
 
-  template <class Alloc> constexpr void push_back(const T &v, Alloc &a) {
+  template <class Alloc> constexpr void push_back(Alloc &a, const T &v) {
     emplace_back(a, v);
   }
 
-  template <class Alloc> constexpr void push_back(T &&v, Alloc &a) {
+  template <class Alloc> constexpr void push_back(Alloc &a, T &&v) {
     emplace_back(a, std::move(v));
+  }
+
+  template <class Alloc> constexpr void push_back(const T &v) {
+    emplace_back(v);
+  }
+
+  template <class Alloc> constexpr void push_back(T &&v) {
+    emplace_back(std::move(v));
   }
 
   constexpr void pop_back() {

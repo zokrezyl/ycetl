@@ -5,6 +5,7 @@
 // #include <ycetl/allocator_traits.hpp>
 #include <ycetl/impl/dynamic_allocator.hpp>
 #include <ycetl/impl/multitype_allocator.hpp>
+#include <ycetl/types.hpp>
 
 namespace ycetl {
 
@@ -66,7 +67,7 @@ using multitype_dynamic_allocator =
 template <typename T>
 using default_allocator =
     ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator,
-                                         ycetl::type_set<T>>;
+                                         ::ycetl::type_set<T>>;
 
 namespace memory {
 #if 0
