@@ -2,12 +2,12 @@
 #include <type_traits>
 
 #include <ycetl/types.hpp> // type_set
+
 namespace ycetl {
+
 //===----------------------------------------------------------------------===//
 // type_set and utilities
 //===----------------------------------------------------------------------===//
-
-// template <typename... Ts> struct type_set {};
 
 // Check if T is in Set
 template <typename T, typename Set> struct contains;
@@ -20,26 +20,26 @@ struct contains<T, type_set<Head, Tail...>>
                          contains<T, type_set<Tail...>>> {};
 
 //===----------------------------------------------------------------------===//
-// backend_type<T> using marker trait `T::backend_of` if present
+// relevant_type<T> using marker trait `T::relevant_of` if present
 //===----------------------------------------------------------------------===//
 
-template <typename T, typename = void> struct backend_type {
+template <typename T, typename = void> struct relevant_type {
   using type = T;
 };
 
 template <typename T>
-struct backend_type<T, std::void_t<typename T::backend_of>> {
-  using type = typename T::backend_of;
+struct relevant_type<T, std::void_t<typename T::relevant_of>> {
+  using type = typename T::relevant_of;
 };
 
 //===----------------------------------------------------------------------===//
-// map backend_type<T> over a type_set<Ts...>
+// map relevant_type<T> over a type_set<Ts...>
 //===----------------------------------------------------------------------===//
 
-template <typename TypeSet> struct map_backend;
+template <typename TypeSet> struct map_relevant;
 
-template <typename... Ts> struct map_backend<type_set<Ts...>> {
-  using type = type_set<typename backend_type<Ts>::type...>;
+template <typename... Ts> struct map_relevant<type_set<Ts...>> {
+  using type = type_set<typename relevant_type<Ts>::type...>;
 };
 
 //===----------------------------------------------------------------------===//
@@ -69,12 +69,38 @@ template <typename Set> struct remove_duplicates {
 // Final composition
 //===----------------------------------------------------------------------===//
 
-template <typename Input> struct working_type_set {
+template <typename Input> struct relevant_types {
 private:
-  using mapped = typename map_backend<Input>::type;
+  using mapped = typename map_relevant<Input>::type;
 
 public:
   using type = typename remove_duplicates<mapped>::type;
 };
+
+template <typename T> using relevant_types_t = typename relevant_types<T>::type;
+
+namespace ycetl {
+
+/**
+ * @brief Forces compile-time resolution of relevant types from a type_set.
+ *
+ * This function triggers the instantiation of `relevant_types_t<T>` in a
+ * `consteval` context, ensuring that all type transformations (e.g.,
+ * deduplication and recursive resolution via `relevant_of`) are performed at
+ * compile time.
+ *
+ * Use this to catch structural or semantic errors early, and to validate
+ * correctness of the type system in constexpr-enabled environments.
+ *
+ * @tparam T A `type_set<...>` representing the input types.
+ * @return A default-initialized value of the resulting relevant type set
+ * (unused).
+ */
+template <typename T>
+consteval auto make_relevant_types() -> relevant_types_t<T> {
+  return {};
+}
+
+} // namespace ycetl
 
 } // namespace ycetl

@@ -21,6 +21,24 @@ public:
   owned_pointer(const owned_pointer &) = delete;
   owned_pointer &operator=(const owned_pointer &) = delete;
 
+  constexpr owned_pointer(owned_pointer &&other) noexcept
+      : _ptr(other._ptr), _owned(other._owned) {
+    other._ptr = nullptr;
+    other._owned = false;
+  }
+
+  constexpr owned_pointer &operator=(owned_pointer &&other) noexcept {
+    if (this != &other) {
+      if (_owned && _ptr)
+        delete _ptr;
+      _ptr = other._ptr;
+      _owned = other._owned;
+      other._ptr = nullptr;
+      other._owned = false;
+    }
+    return *this;
+  }
+
   constexpr ~owned_pointer() {
     if (_owned && _ptr)
       delete _ptr; // ← honour non‑owned case

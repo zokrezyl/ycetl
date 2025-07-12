@@ -2,8 +2,9 @@
 
 namespace yectl {
 
+template <class CharT, class Traits = std::char_traits<CharT>>
 class string_view {
-  const char *data = nullptr;
+  const CharT *data = nullptr;
   std::size_t size = 0;
 
 public:

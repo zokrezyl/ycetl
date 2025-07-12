@@ -33,7 +33,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-
   "vector_with_size"_test = [] {
     constexpr auto test = [] {
       MAKE_MULTITYPE_ALLOCATOR;
@@ -178,51 +177,44 @@ suite vector_suite = [] {
     expect(test());
   };
 
-#if 0
   "nested_vectors"_test = [] {
     constexpr auto test = [] {
-      // Single storage for all types
-      using storage_type = ycetl::memory::multitype_storage<
-          ycetl::memory::dynamic_storage,
-          ycetl::type_set<int, double, char, Test, std::pair<int, int>>>;
-      auto storage = storage_type();
+      /* ── 1. single multitype allocator instance for all payload types ── */
+      using payload_types = ycetl::type_set<
+          int, double, char, Test, std::pair<int, int>,
+          ycetl::dynamic_array<int>, // backend of vector<int>
+          ycetl::dynamic_array<ycetl::dynamic_array<int>> // backend of
+                                                          // vector<vector<int>>
+          >;
 
-      // Allocators for both int and vector<int>
-      auto int_alloc = ycetl::allocator::allocator<int, storage_type>(storage);
+      using storage_t =
+          ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator,
+                                             payload_types>;
 
-      // Create a few inner vectors
-      ycetl::vector<int, decltype(int_alloc)> inner1(int_alloc);
+      storage_t storage; // concrete allocator object
+
+      /* ── 2. aliasing allocator handles for the element types we use ─── */
+      auto int_alloc =
+          storage; // allocator& for int     (alias, no wrapper needed)
+      using inner_vec = ycetl::vector<int, storage_t>;
+
+      auto vec_alloc = storage; // allocator& for inner_vec (same storage)
+
+      /* ── 3. build inner vectors -------------------------------------- */
+      inner_vec inner1{int_alloc};
       inner1.push_back(42);
       inner1.push_back(43);
 
-      // Define the vector type we want to store
-      using inner_vector_type = ycetl::vector<int, decltype(int_alloc)>;
-
-      // Extend the storage to include the vector type
-      using extended_storage_type = ycetl::memory::multitype_storage<
-          ycetl::memory::dynamic_storage,
-          ycetl::type_set<int, double, char, Test, std::pair<int, int>,
-                          inner_vector_type>>;
-      auto extended_storage = extended_storage_type();
-
-      // Create allocator for vectors
-      auto vector_alloc =
-          ycetl::allocator::allocator<inner_vector_type, extended_storage_type>(
-              extended_storage);
-
-      // Create outer vector
-      ycetl::vector<inner_vector_type, decltype(vector_alloc)> outer(
-          vector_alloc);
-
-      // Test operations
+      /* ── 4. outer vector of inner vectors ----------------------------- */
+      ycetl::vector<inner_vec, storage_t> outer{vec_alloc};
       outer.push_back(inner1);
 
+      /* ── 5. assertions ------------------------------------------------ */
       return outer.size() == 1_u && outer[0].size() == 2_u &&
              outer[0][0] == 42_i;
     };
     expect(test());
   };
-#endif
 };
 
 int main(int argc, char **argv) { return 0; }
