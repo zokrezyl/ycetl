@@ -195,6 +195,7 @@ public:
   /* modifiers ---------------------------------------------------------- */
   constexpr void push_back(const T &v) {
     if constexpr (is_vector<T>::value)
+      // the first alloc() is for the vector itself, the second for the back-end
       _storage->emplace_back(alloc(), alloc(), *v._storage); // copy back‑end
     else
       _storage->push_back(alloc(), v);

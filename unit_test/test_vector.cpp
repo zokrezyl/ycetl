@@ -215,6 +215,33 @@ suite vector_suite = [] {
     };
     expect(test());
   };
+
+  "nested_vectors_single"_test = [] {
+    constexpr auto test = [] {
+      using working_types = ycetl::relevant_types_t<
+          ycetl::type_set<ycetl::vector<ycetl::vector<int>>>>;
+
+      using allocator_t =
+          ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator,
+                                             working_types>;
+
+      allocator_t alloc;
+
+      using inner_vec = ycetl::vector<int, allocator_t>;
+      using outer_vec = ycetl::vector<inner_vec, allocator_t>;
+
+      inner_vec inner{alloc};
+      inner.push_back(1);
+      inner.push_back(2);
+
+      outer_vec outer{alloc};
+      outer.push_back(inner);
+
+      return outer.size() == 1_u && outer[0].size() == 2_u &&
+             outer[0][1] == 2_i;
+    };
+    expect(test());
+  };
 };
 
 int main(int argc, char **argv) { return 0; }
