@@ -95,4 +95,7 @@ template <typename Input> struct relevant_types {
 
 template <typename T> using relevant_types_t = typename relevant_types<T>::type;
 
+template <typename T>
+using relevant_types_of_t = typename relevant_types_of<T>::type;
+
 } // namespace ycetl

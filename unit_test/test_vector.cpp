@@ -176,7 +176,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#if 0
   "nested_vectors"_test = [] {
     constexpr auto test = [] {
       /* ── 1. single multitype allocator instance for all payload types ── */
@@ -242,7 +241,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#endif
 };
 #if 0
 constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
@@ -258,12 +256,24 @@ constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
 
   return vec; // copy‑elided, still constexpr
 }
+#endif
+
+constexpr ycetl::vector<int> make_vector_simple() {
+  /*  outer and inner vectors both use the library’s default_allocator   */
+  ycetl::vector<int> vec;
+
+  vec.push_back(1); // set values on the inner vector
+  vec.push_back(2);
+
+  return vec; // copy‑elided, still constexpr
+}
 
 /*──────────────────────────────────────────────────────────────────────────────
   suite : default‑allocator + make_vector()
 ──────────────────────────────────────────────────────────────────────────────*/
 suite default_allocator_suite = [] {
-  /* helper that builds a nested vector without passing any allocator ---- */
+/* helper that builds a nested vector without passing any allocator ---- */
+#if 0
   "make_vector_default_allocator"_test = [] {
     constexpr auto test = [] {
       auto v = make_vector();
@@ -273,7 +283,14 @@ suite default_allocator_suite = [] {
     };
     expect(test());
   };
-};
 #endif
+  "make_vector_default_allocator"_test = [] {
+    constexpr auto test = [] {
+      auto v = make_vector_simple();
+      return true;
+    };
+    expect(test());
+  };
+};
 
 int main(int argc, char **argv) { return 0; }

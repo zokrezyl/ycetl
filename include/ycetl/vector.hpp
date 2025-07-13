@@ -13,6 +13,22 @@
 
 namespace ycetl {
 
+template <typename T, typename = void>
+struct has_storage_type : std::false_type {};
+
+template <typename T>
+struct has_storage_type<T, std::void_t<typename T::storage_type>>
+    : std::true_type {};
+
+template <typename T, bool = has_storage_type<T>::value>
+struct storage_type_trait {
+  using type = T;
+};
+
+template <typename T> struct storage_type_trait<T, true> {
+  using type = typename T::storage_type;
+};
+
 template <class T, class Alloc> class vector;
 /* detect nested vector --------------------------------------------------- */
 template <class> struct is_vector : std::false_type {};
@@ -20,8 +36,8 @@ template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
 /* iterator --------------------------------------------------------------- */
 template <class T, class Alloc, bool Const> class vector_iterator {
-  using backend = typename relevant_type<T>::type;
-  using raw = std::conditional_t<Const, const backend *, backend *>;
+  using storage_unit = typename storage_type_trait<T>::type;
+  using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
   raw _ptr = nullptr;
   Alloc *_alloc = nullptr;
 
@@ -41,7 +57,7 @@ public:
 
   constexpr value_type operator*() const {
     if constexpr (is_vector<T>::value)
-      return T(*_alloc, const_cast<backend &>(*_ptr));
+      return T(*_alloc, const_cast<storage_unit &>(*_ptr));
     else
       return *_ptr;
   }
@@ -101,24 +117,13 @@ public:
 template <class T, class A> using vec_iter = vector_iterator<T, A, false>;
 template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 
-template <typename T, typename = void>
-struct has_storage_type : std::false_type {};
-
-template <typename T>
-struct has_storage_type<T, std::void_t<typename T::storage_type>>
-    : std::true_type {};
-
-template <typename T, bool = has_storage_type<T>::value>
-struct storage_type_trait {
-  using type = T;
-};
-
-template <typename T> struct storage_type_trait<T, true> {
-  using type = typename T::storage_type;
-};
-
 /*──────────────────────────── vector ─────────────────────────────────────*/
-template <class T, class Allocator = default_allocator<T>> class vector {
+// clang-format off
+template <class T, 
+          class Allocator = default_allocator<
+              relevant_types_t<type_set<T>>>>
+// clang-format on
+class vector {
 public:
 private:
   using storage_unit = typename storage_type_trait<T>::type;
@@ -126,7 +131,7 @@ private:
 public:
   using storage_type = dynamic_array<storage_unit>;
   using relevant_of =
-      type_set_cat_t<storage_type, typename relevant_types_of<T>::type>;
+      type_set_cat_t<storage_unit, typename relevant_types_of<T>::type>;
 
   using value_type = T;
   using size_type = std::size_t;
