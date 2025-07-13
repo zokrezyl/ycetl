@@ -1,111 +1,98 @@
 #pragma once
 #include <type_traits>
-
-#include <ycetl/types.hpp> // type_set
+#include <ycetl/types.hpp>
 
 namespace ycetl {
 
-/**
- * @brief Concept for types that define a `relevant_of` member type.
- *
- * This concept is satisfied if the type `T` provides a nested type alias
- * named `relevant_of`, which is used to derive the relevant (backend) type.
- */
-template <typename T>
-concept has_relevant_of = requires { typename T::relevant_of; };
+// Type Set Concatenation
 
-//===----------------------------------------------------------------------===//
-// type_set and utilities
-//===----------------------------------------------------------------------===//
+template <typename...> struct type_set_cat;
 
-// Check if T is in Set
+template <typename... Ts> struct type_set_cat<type_set<Ts...>> {
+  using type = type_set<Ts...>;
+};
+
+template <typename... Ts, typename... Us>
+struct type_set_cat<type_set<Ts...>, type_set<Us...>> {
+  using type = type_set<Ts..., Us...>;
+};
+
+template <typename... Ts, typename... Us, typename... Rest>
+struct type_set_cat<type_set<Ts...>, type_set<Us...>, Rest...> {
+  using type = typename type_set_cat<type_set<Ts..., Us...>, Rest...>::type;
+};
+
+// Helper to convert single type into type_set
+template <typename T> struct as_type_set {
+  using type = type_set<T>;
+};
+
+template <typename... Ts> struct as_type_set<type_set<Ts...>> {
+  using type = type_set<Ts...>;
+};
+
+template <typename... Args>
+using type_set_cat_t =
+    typename type_set_cat<typename as_type_set<Args>::type...>::type;
+
+// Remove duplicates
+
 template <typename T, typename Set> struct contains;
 
 template <typename T> struct contains<T, type_set<>> : std::false_type {};
 
-template <typename T, typename Head, typename... Tail>
-struct contains<T, type_set<Head, Tail...>>
-    : std::conditional_t<std::is_same_v<T, Head>, std::true_type,
-                         contains<T, type_set<Tail...>>> {};
-
-//===----------------------------------------------------------------------===//
-// relevant_type<T> using marker trait `T::relevant_of` if present
-//===----------------------------------------------------------------------===//
-
-template <typename T, typename = void> struct relevant_type {
-  using type = T;
-};
-
-template <typename T>
-struct relevant_type<T, std::void_t<typename T::relevant_of>> {
-  using type = typename T::relevant_of;
-};
-
-//===----------------------------------------------------------------------===//
-// map relevant_type<T> over a type_set<Ts...>
-//===----------------------------------------------------------------------===//
-
-template <typename TypeSet> struct map_relevant;
-
-template <typename... Ts> struct map_relevant<type_set<Ts...>> {
-  using type = type_set<typename relevant_type<Ts>::type...>;
-};
-
-//===----------------------------------------------------------------------===//
-// remove_duplicates
-//===----------------------------------------------------------------------===//
+template <typename T, typename U, typename... Rest>
+struct contains<T, type_set<U, Rest...>>
+    : std::conditional_t<std::is_same_v<T, U>, std::true_type,
+                         contains<T, type_set<Rest...>>> {};
 
 template <typename InputSet, typename Result = type_set<>>
-struct remove_duplicates_impl;
+struct remove_duplicates;
 
-template <typename Result> struct remove_duplicates_impl<type_set<>, Result> {
+template <typename Result> struct remove_duplicates<type_set<>, Result> {
   using type = Result;
 };
 
 template <typename Head, typename... Tail, typename... Rs>
-struct remove_duplicates_impl<type_set<Head, Tail...>, type_set<Rs...>> {
-  using next = std::conditional_t<contains<Head, type_set<Rs...>>::value,
-                                  type_set<Rs...>, type_set<Rs..., Head>>;
-
-  using type = typename remove_duplicates_impl<type_set<Tail...>, next>::type;
+struct remove_duplicates<type_set<Head, Tail...>, type_set<Rs...>> {
+  using type = typename remove_duplicates<
+      type_set<Tail...>,
+      std::conditional_t<contains<Head, type_set<Rs...>>::value,
+                         type_set<Rs...>, type_set<Rs..., Head>>>::type;
 };
 
-template <typename Set> struct remove_duplicates {
-  using type = typename remove_duplicates_impl<Set>::type;
+template <typename Set>
+using remove_duplicates_t = typename remove_duplicates<Set>::type;
+
+// Relevant type extraction
+
+template <typename T, typename = void> struct relevant_types_of {
+  using type = type_set<T>;
 };
 
-//===----------------------------------------------------------------------===//
-// Final composition
-//===----------------------------------------------------------------------===//
+template <typename T>
+struct relevant_types_of<T, std::void_t<typename T::relevant_of>> {
+  using type = typename T::relevant_of;
+};
+
+// Recursive mapping and flattening
+
+template <typename T> struct flatten_relevant_types {
+  using immediate = typename relevant_types_of<T>::type;
+  using type = immediate;
+};
+
+template <typename... Ts> struct flatten_relevant_types<type_set<Ts...>> {
+  using type = type_set_cat_t<typename flatten_relevant_types<Ts>::type...>;
+};
+
+// Main relevant_types implementation
 
 template <typename Input> struct relevant_types {
-private:
-  using mapped = typename map_relevant<Input>::type;
-
-public:
-  using type = typename remove_duplicates<mapped>::type;
+  using type =
+      remove_duplicates_t<typename flatten_relevant_types<Input>::type>;
 };
 
 template <typename T> using relevant_types_t = typename relevant_types<T>::type;
-
-/**
- * @brief Forces compile-time resolution of relevant types from a type_set.
- *
- * This function triggers the instantiation of `relevant_types_t<T>` in a
- * `consteval` context, ensuring that all type transformations (e.g.,
- * deduplication and recursive resolution via `relevant_of`) are performed at
- * compile time.
- *
- * Use this to catch structural or semantic errors early, and to validate
- * correctness of the type system in constexpr-enabled environments.
- *
- * @tparam T A `type_set<...>` representing the input types.
- * @return A default-initialized value of the resulting relevant type set
- * (unused).
- */
-template <typename T>
-consteval auto test_relevant_types() -> relevant_types_t<T> {
-  return {};
-}
 
 } // namespace ycetl

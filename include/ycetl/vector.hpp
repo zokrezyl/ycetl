@@ -101,13 +101,37 @@ public:
 template <class T, class A> using vec_iter = vector_iterator<T, A, false>;
 template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 
+template <typename T, typename = void>
+struct has_storage_type : std::false_type {};
+
+template <typename T>
+struct has_storage_type<T, std::void_t<typename T::storage_type>>
+    : std::true_type {};
+
+template <typename T, bool = has_storage_type<T>::value>
+struct storage_type_trait {
+  using type = T;
+};
+
+template <typename T> struct storage_type_trait<T, true> {
+  using type = typename T::storage_type;
+};
+
 /*──────────────────────────── vector ─────────────────────────────────────*/
 template <class T, class Allocator = default_allocator<T>> class vector {
 public:
-  using relevant_of = dynamic_array<typename relevant_type<T>::type>;
-
 private:
-  using storage_type = relevant_of;
+  using storage_unit = typename storage_type_trait<T>::type;
+
+public:
+  using storage_type = dynamic_array<storage_unit>;
+  using relevant_of =
+      type_set_cat_t<storage_type, typename relevant_types_of<T>::type>;
+
+  using value_type = T;
+  using size_type = std::size_t;
+  using iterator = vec_iter<T, Allocator>;
+  using const_iterator = vec_citer<T, Allocator>;
 
   owned_pointer<Allocator> _alloc_ptr;
   owned_pointer<storage_type> _storage;
@@ -118,12 +142,6 @@ private:
   constexpr vector(Allocator &a, storage_type &s)
       : _alloc_ptr(&a), _storage(&s) {}
   template <class, class> friend class vector;
-
-public:
-  using value_type = T;
-  using size_type = std::size_t;
-  using iterator = vec_iter<T, Allocator>;
-  using const_iterator = vec_citer<T, Allocator>;
 
   /* constructors (unchanged bodies, but _storage calls stay correct) */
   constexpr vector() : _alloc_ptr(), _storage() {}
