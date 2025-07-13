@@ -1,6 +1,8 @@
 #include <ycetl/relevant_types.hpp>
 #include <ycetl/memory.hpp>
 
+#include <vector>
+
 template <typename... Args>
 struct container_traits {
   using value_type = typename ycetl::relevant_types_t<Args...>;
@@ -34,8 +36,23 @@ struct unordered_map : public container<Key, Value, Allocator> {
   using mapped_type = Value;
 };
 
+
+template <template <typename... Args> typename shit>
+class  test {
+public:
+  template <typename ...Args>
+  using my_shit = shit<Args...>;
+
+};
+
 int main() {
+  test<std::vector<std::vector<int>>> t;
+  typename decltype(t)::template my_shit<int> v; // vector<int>
+}
+
+int _main() {
   set<vector<int>> s1;
   unordered_map<int, vector<int>> m1;
+
 }
 
