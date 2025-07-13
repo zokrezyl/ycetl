@@ -122,15 +122,15 @@ public:
 private:
   owned_pointer<Allocator> _alloc_ptr;
   owned_pointer<storage_type> _storage;
-  constexpr vector(storage_type &storage, Allocator &alloc)
-      : _alloc_ptr(&alloc), _storage(storage) {}
 
 public:
+  // constructor for internal use only
+  constexpr vector(storage_type &storage, Allocator &alloc)
+      : _alloc_ptr(&alloc), _storage(&storage) {}
+
   constexpr Allocator &alloc() { return *_alloc_ptr; }
   constexpr const Allocator &alloc() const { return *_alloc_ptr; }
 
-  constexpr vector(Allocator &a, storage_type &s)
-      : _alloc_ptr(&a), _storage(&s) {}
   template <class, class> friend class vector;
 
   /* constructors (unchanged bodies, but _storage calls stay correct) */
@@ -189,13 +189,14 @@ public:
   /* element access ----------------------------------------------------- */
   constexpr T operator[](size_type i) {
     if constexpr (is_vector<T>::value)
-      return T(alloc(), (*_storage)[i]);
+      return T((*_storage)[i], alloc());
     else
       return (*_storage)[i];
   }
+
   constexpr const T operator[](size_type i) const {
     if constexpr (is_vector<T>::value)
-      return T(alloc(), (*_storage)[i]);
+      return T((*_storage)[i], alloc());
     else
       return (*_storage)[i];
   }
@@ -222,7 +223,9 @@ public:
   */
   template <class... Args> constexpr auto emplace_back(Args &&...args) {
     if constexpr (is_vector<T>::value) {
-      return T(*_storage->emplace_back(std::forward<Args>(args)...), alloc());
+      auto &inner_ref =
+          *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
+      return T(inner_ref, alloc());
     } else {
       return (*_storage->emplace_back(alloc(), std::forward<Args>(args)...));
     }
