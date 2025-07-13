@@ -88,13 +88,11 @@ template <typename... Ts> struct flatten_relevant_types<type_set<Ts...>> {
 
 // Main relevant_types implementation
 
-template <typename Input> struct relevant_types {
-  using type =
-      remove_duplicates_t<typename flatten_relevant_types<Input>::type>;
-};
+template <typename... Args>
+using relevant_types_t = remove_duplicates_t<
+    typename flatten_relevant_types<type_set<Args...>>::type>;
 
-template <typename T> using relevant_types_t = typename relevant_types<T>::type;
-
+// Helper alias
 template <typename T>
 using relevant_types_of_t = typename relevant_types_of<T>::type;
 
