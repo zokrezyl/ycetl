@@ -75,15 +75,21 @@ struct relevant_types_of<T, std::void_t<typename T::relevant_of>> {
   using type = typename T::relevant_of;
 };
 
-// Recursive mapping and flattening
+// Recursive flattening
 
 template <typename T> struct flatten_relevant_types {
   using immediate = typename relevant_types_of<T>::type;
-  using type = immediate;
+  using type = typename flatten_relevant_types<immediate>::type;
 };
 
 template <typename... Ts> struct flatten_relevant_types<type_set<Ts...>> {
-  using type = type_set_cat_t<typename flatten_relevant_types<Ts>::type...>;
+  using type = remove_duplicates_t<
+      type_set_cat_t<typename flatten_relevant_types<Ts>::type...>>;
+};
+
+// Base case for non-container types
+template <typename T> struct flatten_relevant_types<type_set<T>> {
+  using type = type_set<T>;
 };
 
 // Main relevant_types implementation
