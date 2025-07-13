@@ -7,27 +7,10 @@
 #include <type_traits>
 #include <utility>
 
-#include <ycetl/dynamic_array.hpp>
+#include <ycetl/impl/container.hpp>
 #include <ycetl/memory.hpp>
-#include <ycetl/relevant_types.hpp>
 
 namespace ycetl {
-
-template <typename T, typename = void>
-struct has_storage_type : std::false_type {};
-
-template <typename T>
-struct has_storage_type<T, std::void_t<typename T::storage_type>>
-    : std::true_type {};
-
-template <typename T, bool = has_storage_type<T>::value>
-struct storage_type_trait {
-  using type = T;
-};
-
-template <typename T> struct storage_type_trait<T, true> {
-  using type = typename T::storage_type;
-};
 
 template <class T, class Alloc> class vector;
 /* detect nested vector --------------------------------------------------- */
@@ -36,7 +19,7 @@ template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
 /* iterator --------------------------------------------------------------- */
 template <class T, class Alloc, bool Const> class vector_iterator {
-  using storage_unit = typename storage_type_trait<T>::type;
+  using storage_unit = storage_type_of_t<T>;
   using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
   raw _ptr = nullptr;
   Alloc *_alloc = nullptr;
@@ -119,28 +102,30 @@ template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 
 /*──────────────────────────── vector ─────────────────────────────────────*/
 // clang-format off
-template <class T, 
-          class Allocator = default_allocator<
-              relevant_types_t<type_set<T>>>>
+template <typename T, 
+typename Allocator = typename container::container<T>::default_allocator>
 // clang-format on
-class vector {
+class vector : public container::container<T, Allocator> {
 public:
-private:
-  using storage_unit = typename storage_type_trait<T>::type;
-
 public:
-  using storage_type = dynamic_array<storage_unit>;
-  using relevant_of =
-      type_set_cat_t<storage_unit, typename relevant_types_of<T>::type>;
+  using base_type = container::container<T, Allocator>;
+  using typename base_type::relevant_of;
+  using typename base_type::storage_type;
+  using typename base_type::storage_unit;
+  using allocator_type = Allocator;
 
   using value_type = T;
   using size_type = std::size_t;
   using iterator = vec_iter<T, Allocator>;
   using const_iterator = vec_citer<T, Allocator>;
 
+private:
   owned_pointer<Allocator> _alloc_ptr;
   owned_pointer<storage_type> _storage;
+  constexpr vector(storage_type &storage, Allocator &alloc)
+      : _alloc_ptr(&alloc), _storage(storage) {}
 
+public:
   constexpr Allocator &alloc() { return *_alloc_ptr; }
   constexpr const Allocator &alloc() const { return *_alloc_ptr; }
 
@@ -230,8 +215,17 @@ public:
       _storage->push_back(alloc(), std::move(v));
   }
 
+  /*
   template <class... Args> constexpr T &emplace_back(Args &&...args) {
     return *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
+  }
+  */
+  template <class... Args> constexpr auto emplace_back(Args &&...args) {
+    if constexpr (is_vector<T>::value) {
+      return T(*_storage->emplace_back(std::forward<Args>(args)...), alloc());
+    } else {
+      return (*_storage->emplace_back(alloc(), std::forward<Args>(args)...));
+    }
   }
 
   constexpr iterator insert(iterator pos, const T &val) {

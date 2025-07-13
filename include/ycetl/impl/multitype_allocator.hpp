@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 
-#include <ycetl/impl/multitype.hpp>
+#include <ycetl/impl/multitype_handler.hpp>
 
 namespace ycetl {
 namespace memory {
@@ -10,6 +10,7 @@ template <template <typename> class StorageBackend, typename TypeSet>
 class multitype_allocator : public multitype_handler<StorageBackend, TypeSet> {
 public:
   using multitype_handler<StorageBackend, TypeSet>::multitype_handler;
+  using type_set = TypeSet;
 
   // Array allocation
   template <typename T> constexpr T *allocate(std::size_t n) {

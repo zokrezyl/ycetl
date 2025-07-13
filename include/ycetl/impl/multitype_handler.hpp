@@ -4,6 +4,12 @@
 
 namespace ycetl {
 
+template <typename T, typename TypeSet> struct type_in_typeset;
+
+template <typename T, typename... Ts>
+struct type_in_typeset<T, type_set<Ts...>>
+    : std::bool_constant<(std::is_same_v<T, Ts> || ...)> {};
+
 /*
 The `multitype_handler` exists primarily to support the operations of
 `multitype_storage`. It provides mechanisms to operate uniformly across
@@ -26,15 +32,23 @@ private:
   std::tuple<HandlerImpl<Ts>...> _handlers;
 
 public:
+  using handled_types = type_set<Ts...>;
   // Default constructor
   constexpr multitype_handler() = default;
 
   // Access handler for a specific type
   template <typename T> constexpr HandlerImpl<T> &get_handler() {
+    static_assert(type_in_typeset<T, type_set<Ts...>>::value,
+                  "multitype_handler error: requested handler type is not "
+                  "present in the type_set");
+
     return std::get<HandlerImpl<T>>(_handlers);
   }
 
   template <typename T> constexpr const HandlerImpl<T> &get_handler() const {
+    static_assert(type_in_typeset<T, type_set<Ts...>>::value,
+                  "multitype_handler error: requested handler type is not "
+                  "present in the type_set");
     return std::get<HandlerImpl<T>>(_handlers);
   }
 };

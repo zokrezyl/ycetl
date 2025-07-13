@@ -1,6 +1,8 @@
 #include <type_traits>
 #include <ycetl/relevant_types.hpp>
 #include <ycetl/dynamic_array.hpp>
+#include <ycetl/impl/container.hpp>
+#include <ycetl/vector.hpp>
 
 #include <iostream>
 #include <string>
@@ -30,34 +32,6 @@ std::string type_name() {
 // Dummy container types
 //===----------------------------------------------------------------------===//
 
-template <typename T, typename = void>
-struct storage_type_of {
-  using type = T;
-};
-
-template <typename T>
-struct storage_type_of<T, std::void_t<typename T::storage_type>> {
-  using type = typename T::storage_type;
-};
-
-template <typename T>
-using storage_type_of_t = typename storage_type_of<T>::type;
-
-
-template <typename T>
-struct vector {
-  using storage_unit = storage_type_of_t<T>;
-  using storage_type = dynamic_array<storage_unit>;
-  using relevant_of = relevant_types_t<storage_unit, T>;
-};
-
-template <typename T>
-struct set {
-  using storage_unit = storage_type_of_t<T>;
-  using storage_type = dynamic_array<storage_unit>;
-  using relevant_of = relevant_types_t<storage_unit, T>;
-};
-
 
 //===----------------------------------------------------------------------===//
 // Type pretty-printer (for relevant_types results)
@@ -78,11 +52,13 @@ void print_type_impl(std::ostream& os, const vector<T>&, int indent) {
     print_type<T>(os, indent + 2);
 }
 
+#if 0
 template <typename T>
 void print_type_impl(std::ostream& os, const set<T>&, int indent) {
     os << std::string(indent, ' ') << "- set\n";
     print_type<T>(os, indent + 2);
 }
+#endif
 
 template <typename T>
 void print_type_impl(std::ostream& os, const T&, int indent) {
@@ -150,20 +126,14 @@ int main() {
         int,
         dynamic_array<int>>;
 
-    using result1 = relevant_types_t<
-  vector<vector<int>>,
-  set<vector<int>>
-  >;
-    using result2 = relevant_types_t<
+    using result = relevant_types_t<
   vector<vector<int>>,
   vector<vector<int>>
   >;
 
     std::cout << "Resolved relevant types1:\n";
-    print_type_set(std::cout, result1{});
+    print_type_set(std::cout, result{});
 
-    std::cout << "\n\nResolved relevant types2:\n";
-    print_type_set(std::cout, result2{});
 
     std::cout << "\n\nExpected relevant types:\n";
     print_type_set(std::cout, expected{});

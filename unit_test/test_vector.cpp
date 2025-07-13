@@ -2,7 +2,7 @@
 #include <iostream>
 #include <ycetl/impl/allocator.hpp>
 #include <ycetl/impl/dynamic_allocator.hpp>
-#include <ycetl/impl/multitype.hpp>
+// #include <ycetl/impl/multitype_handler.hpp>
 #include <ycetl/impl/multitype_allocator.hpp>
 #include <ycetl/vector.hpp>
 
@@ -178,74 +178,40 @@ suite vector_suite = [] {
   };
   "nested_vectors"_test = [] {
     constexpr auto test = [] {
-      /* ── 1. single multitype allocator instance for all payload types ── */
-      using payload_types = ycetl::type_set<
-          int, double, char, Test, std::pair<int, int>,
-          ycetl::dynamic_array<int>, // backend of vector<int>
-          ycetl::dynamic_array<ycetl::dynamic_array<int>> // backend of
-                                                          // vector<vector<int>>
-          >;
+      using relevant_types =
+          ycetl::relevant_types_t<ycetl::vector<ycetl::vector<int>>>;
 
-      using storage_t =
-          ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator,
-                                             payload_types>;
+      using allocator_t = ycetl::default_allocator<relevant_types>;
 
-      storage_t storage; // concrete allocator object
+      allocator_t allocator;
 
-      /* ── 2. aliasing allocator handles for the element types we use ─── */
-      auto int_alloc =
-          storage; // allocator& for int     (alias, no wrapper needed)
-      using inner_vec = ycetl::vector<int, storage_t>;
+      using inner_vector_t = ycetl::vector<int, allocator_t>;
 
-      auto vec_alloc = storage; // allocator& for inner_vec (same storage)
+      inner_vector_t inner_vec(allocator);
+      inner_vec.push_back(42);
+      inner_vec.push_back(43);
 
-      /* ── 3. build inner vectors -------------------------------------- */
-      inner_vec inner1{int_alloc};
-      inner1.push_back(42);
-      inner1.push_back(43);
+      using outer_vector_t = ycetl::vector<inner_vector_t, allocator_t>;
+      outer_vector_t outer_vec(allocator);
+      outer_vec.push_back(inner_vec);
 
-      /* ── 4. outer vector of inner vectors ----------------------------- */
-      ycetl::vector<inner_vec, storage_t> outer{vec_alloc};
-      outer.push_back(inner1);
-
-      /* ── 5. assertions ------------------------------------------------ */
-      return outer.size() == 1_u && outer[0].size() == 2_u &&
-             outer[0][0] == 42_i;
-    };
-    expect(test());
-  };
-
-  "nested_vectors_single"_test = [] {
-    constexpr auto test = [] {
-      using working_types = ycetl::relevant_types_t<
-          ycetl::type_set<ycetl::vector<ycetl::vector<int>>>>;
-
-      using allocator_t =
-          ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator,
-                                             working_types>;
-
-      allocator_t alloc;
-
-      using inner_vec = ycetl::vector<int, allocator_t>;
-      using outer_vec = ycetl::vector<inner_vec, allocator_t>;
-
-      inner_vec inner{alloc};
-      inner.push_back(1);
-      inner.push_back(2);
-
-      outer_vec outer{alloc};
-      outer.push_back(inner);
-
-      return outer.size() == 1_u && outer[0].size() == 2_u &&
-             outer[0][1] == 2_i;
+      return outer_vec.size() == 1_u && outer_vec[0].size() == 2_u &&
+             outer_vec[0][0] == 42_i && outer_vec[0][1] == 43_i;
     };
     expect(test());
   };
 };
-#if 0
 constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
   /*  outer and inner vectors both use the library’s default_allocator   */
-  ycetl::vector<ycetl::vector<int>> vec;
+  using vec_t = ycetl::vector<ycetl::vector<int>>;
+
+  using allocator_t = typename vec_t::allocator_type;
+  using payload_types = typename allocator_t::type_set;
+  static_assert(std::is_same_v<payload_types,
+                               ycetl::type_set<int, ycetl::dynamic_array<int>>>,
+                "Allocator payload types do not match expected types");
+
+  vec_t vec;
 
   vec.emplace_back();  // add one inner vector (empty)
   vec[0].push_back(1); // set values on the inner vector
@@ -256,7 +222,6 @@ constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
 
   return vec; // copy‑elided, still constexpr
 }
-#endif
 
 constexpr ycetl::vector<int> make_vector_simple() {
   /*  outer and inner vectors both use the library’s default_allocator   */
@@ -272,8 +237,7 @@ constexpr ycetl::vector<int> make_vector_simple() {
   suite : default‑allocator + make_vector()
 ──────────────────────────────────────────────────────────────────────────────*/
 suite default_allocator_suite = [] {
-/* helper that builds a nested vector without passing any allocator ---- */
-#if 0
+  /* helper that builds a nested vector without passing any allocator ---- */
   "make_vector_default_allocator"_test = [] {
     constexpr auto test = [] {
       auto v = make_vector();
@@ -283,7 +247,6 @@ suite default_allocator_suite = [] {
     };
     expect(test());
   };
-#endif
   "make_vector_default_allocator"_test = [] {
     constexpr auto test = [] {
       auto v = make_vector_simple();

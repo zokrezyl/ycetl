@@ -6,7 +6,7 @@
 //#include <ycetl/dynamic_allocator.hpp>
 #include <vector>
 
-
+using namespace ycetl;
 
 struct Test {
   int i;
@@ -14,8 +14,8 @@ struct Test {
 };
 
 constexpr int test (){
-  using working_type_set = ycetl::type_set<int, double, char, Test>;
-  auto allocator = ycetl::memory::multitype_allocator<ycetl::memory::dynamic_allocator, working_type_set>();
+
+  auto allocator = default_allocator<relevant_types_t<vector<Test>, vector<int>>>();
 
   using allocator_type = decltype(allocator);
 
@@ -23,7 +23,6 @@ constexpr int test (){
   ycetl_int_vector.push_back(42);
   ycetl_int_vector.push_back(100);
   ycetl_int_vector.clear();
-
   ycetl::vector<Test, allocator_type> ycetl_test_vector(allocator);
   ycetl_test_vector.push_back({1, 2});
   ycetl_test_vector.push_back({3, 4});

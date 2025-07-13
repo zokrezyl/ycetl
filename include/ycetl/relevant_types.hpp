@@ -75,21 +75,29 @@ struct relevant_types_of<T, std::void_t<typename T::relevant_of>> {
   using type = typename T::relevant_of;
 };
 
-// Recursive flattening
+// Recursive flattening with cycle detection
 
-template <typename T> struct flatten_relevant_types {
-  using immediate = typename relevant_types_of<T>::type;
-  using type = typename flatten_relevant_types<immediate>::type;
-};
-
-template <typename... Ts> struct flatten_relevant_types<type_set<Ts...>> {
-  using type = remove_duplicates_t<
-      type_set_cat_t<typename flatten_relevant_types<Ts>::type...>>;
-};
-
-// Base case for non-container types
-template <typename T> struct flatten_relevant_types<type_set<T>> {
+template <typename T, typename Seen = type_set<>, typename = void>
+struct flatten_relevant_types {
   using type = type_set<T>;
+};
+
+template <typename T, typename Seen>
+struct flatten_relevant_types<T, Seen, std::void_t<typename T::relevant_of>> {
+  using immediate = typename T::relevant_of;
+  using type = typename flatten_relevant_types<immediate, Seen>::type;
+};
+
+template <typename... Ts, typename Seen>
+struct flatten_relevant_types<type_set<Ts...>, Seen> {
+  using type = remove_duplicates_t<
+      type_set_cat_t<typename flatten_relevant_types<Ts, Seen>::type...>>;
+};
+
+template <typename T, typename Seen>
+struct flatten_relevant_types<T, Seen,
+                              std::enable_if_t<contains<T, Seen>::value>> {
+  using type = type_set<>;
 };
 
 // Main relevant_types implementation

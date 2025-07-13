@@ -63,11 +63,10 @@ using multitype_dynamic_allocator =
     ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator,
                                          TypeSet>;
 
-// TODO thte following template should work both for typeset and for single type
+//
 template <typename T>
 using default_allocator =
-    ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator,
-                                         ::ycetl::type_set<T>>;
+    ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator, T>;
 
 namespace memory {
 #if 0
