@@ -9,7 +9,7 @@ if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
 endif()
 
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # disables -std=gnu++20, enforces -std=c++20
 

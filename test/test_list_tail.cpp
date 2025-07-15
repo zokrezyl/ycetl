@@ -60,6 +60,28 @@ struct type_set_init<type_set<T, Rest...>> {
 template <typename Set>
 using type_set_init_t = typename type_set_init<Set>::type;
 
+// ---------------------- NEW: back (last element) ----------------------
+
+// type_set_back: pick out the very last type in a non-empty type_set
+template <typename Set> struct type_set_back;
+
+// Base case: singleton holds the last element
+template <typename T> struct type_set_back<type_set<T>> {
+  using type = T;
+};
+
+// Recursive case: peel off head until only one remains
+template <typename Head, typename... Rest>
+struct type_set_back<type_set<Head, Rest...>> {
+  using type = typename type_set_back<type_set<Rest...>>::type;
+};
+
+// Alias for easier usage
+template <typename Set>
+using type_set_back_t = typename type_set_back<Set>::type;
+
+// ---------------------------------------------------------------------
+
 int main() {
   // Tests for type_set_tail_t
   static_assert(std::is_same<type_set_tail_t<type_set<>>, type_set<>>::value,
@@ -83,12 +105,13 @@ int main() {
 
   using input = type_set<int, double, char>;
   using tail = type_set_tail_t<input>;
-  using tail = type_set_tail_t<input>;
   using init = type_set_init_t<input>;
+  using back = type_set_back_t<input>;
 
-  print<input>();
-  print<tail>();
-  print<init>();
+  print<input>(); // prints: int, double, char
+  print<tail>();  // prints: double, char
+  print<init>();  // prints: int, double
+  print<back>();  // prints: char
 
   return 0;
 }
