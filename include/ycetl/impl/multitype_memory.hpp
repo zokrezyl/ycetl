@@ -43,18 +43,29 @@ public:
 
   constexpr multitype_memory() : handler_type{} {}
 
-  // Construct by sharing handlers from an existing multitype_memory
   constexpr multitype_memory(const handler_type &shared_handlers)
       : handler_type(shared_handlers) {}
 
   template <typename T> constexpr T *allocate(std::size_t n) {
     return this->template get_handler<trivial_shared_ptr<MemoryBackend<T>>>()
+        ->get()
         ->allocate(n);
   }
 
   template <typename T> constexpr void deallocate(T *p) {
     this->template get_handler<trivial_shared_ptr<MemoryBackend<T>>>()
+        ->get()
         ->deallocate(p);
+  }
+  template <typename NewTypeSet> constexpr auto downgrade() const {
+    using new_handler_type = multitype_handler<
+        trivial_shared_ptr,
+        apply_wrapper_t<trivial_shared_ptr,
+                        apply_wrapper_t<MemoryBackend, NewTypeSet>>>;
+
+    return new_handler_type(
+        this->template subset_handlers<apply_wrapper_t<
+            trivial_shared_ptr, apply_wrapper_t<MemoryBackend, NewTypeSet>>>());
   }
 };
 

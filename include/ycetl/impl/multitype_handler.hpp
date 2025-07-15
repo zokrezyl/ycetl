@@ -21,35 +21,38 @@ is theoretically possible, casting back from `void*` to a typed pointer
 (`static_cast<T*>`) is forbidden. This means standard type-erasure techniques
 that work at runtime fail in constexpr contexts.
 */
-
 template <template <typename> class HandlerImpl, typename TypeSet>
 class multitype_handler;
 
 template <template <typename> class HandlerImpl, typename... Ts>
 class multitype_handler<HandlerImpl, type_set<Ts...>> {
 private:
-  // Tuple of handlers for each type in the type_set
   std::tuple<HandlerImpl<Ts>...> _handlers;
 
 public:
   using handled_types = type_set<Ts...>;
-  // Default constructor
   constexpr multitype_handler() = default;
 
-  // Access handler for a specific type
   template <typename T> constexpr HandlerImpl<T> &get_handler() {
     static_assert(type_in_typeset<T, type_set<Ts...>>::value,
-                  "multitype_handler error: requested handler type is not "
-                  "present in the type_set");
-
+                  "requested handler type is not present in the type_set");
     return std::get<HandlerImpl<T>>(_handlers);
   }
 
   template <typename T> constexpr const HandlerImpl<T> &get_handler() const {
     static_assert(type_in_typeset<T, type_set<Ts...>>::value,
-                  "multitype_handler error: requested handler type is not "
-                  "present in the type_set");
+                  "requested handler type is not present in the type_set");
     return std::get<HandlerImpl<T>>(_handlers);
+  }
+
+  template <typename... NewTs>
+  constexpr auto downgrade_impl(type_set<NewTs...>) const {
+    return multitype_handler<HandlerImpl, type_set<NewTs...>>{
+        get_handler<NewTs>()...};
+  }
+
+  template <typename NewTypeSet> constexpr auto downgrade() const {
+    return downgrade_impl(NewTypeSet{});
   }
 };
 
