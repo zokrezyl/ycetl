@@ -39,14 +39,14 @@ suite multitype_memory_suite = [] {
               trivial_shared_ptr,
               apply_wrapper_t<dynamic_memory, downgraded_types>>>());
 
-      int *ptr = downgraded_mem.allocate<int>(3);
-      bool result = ptr != nullptr;
+      int *shared_ptr = downgraded_mem.allocate<int>(3);
+      bool result = shared_ptr != nullptr;
 
-      downgraded_mem.deallocate(ptr);
+      downgraded_mem.deallocate(shared_ptr);
       return result;
     };
+    expect(test());
   };
-  expect(test());
 };
 
 int main(int, char **) { return 0; }
