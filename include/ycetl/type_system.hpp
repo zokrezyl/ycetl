@@ -189,4 +189,16 @@ struct type_set_back<type_set<Head, Rest...>> {
 template <typename Set>
 using type_set_back_t = typename type_set_back<Set>::type;
 
+template <typename T> struct as_pointers;
+
+template <typename... Ts> struct as_pointers<type_set<Ts...>> {
+  using type = type_set<Ts *...>;
+};
+
+template <typename T> using as_pointers_t = typename as_pointers<T>::type;
+
+// Example Usage:
+using original = type_set<int, char, double>;
+using pointers = as_pointers<original>;
+
 } // namespace ycetl
