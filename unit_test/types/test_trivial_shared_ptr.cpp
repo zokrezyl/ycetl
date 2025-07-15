@@ -6,7 +6,6 @@ using namespace ycetl;
 
 struct SimpleType {
   int *value{};
-
   constexpr SimpleType(int v) : value(new int(v)) {}
   constexpr ~SimpleType() { delete value; }
 
@@ -15,11 +14,18 @@ struct SimpleType {
 
 struct ComposedType {
   SimpleType *simple{};
-
   constexpr ComposedType(int v) : simple(new SimpleType(v)) {}
   constexpr ~ComposedType() { delete simple; }
 
   constexpr int get() const { return simple->get(); }
+};
+
+struct NestedComposedType {
+  trivial_shared_ptr<SimpleType> ptr{};
+
+  constexpr NestedComposedType(int v) : ptr(new SimpleType(v)) {}
+
+  constexpr int get() const { return ptr->get(); }
 };
 
 suite trivial_shared_ptr_suite = [] {
@@ -45,6 +51,15 @@ suite trivial_shared_ptr_suite = [] {
     constexpr auto test = [] {
       trivial_shared_ptr<ComposedType> ptr{new ComposedType(200)};
       return ptr.get()->get() == 200;
+    };
+    static_assert(test());
+    expect(test());
+  };
+
+  "nested_composed_type_allocation"_test = [] {
+    constexpr auto test = [] {
+      trivial_shared_ptr<NestedComposedType> ptr{new NestedComposedType(300)};
+      return ptr.get()->get() == 300;
     };
     static_assert(test());
     expect(test());
