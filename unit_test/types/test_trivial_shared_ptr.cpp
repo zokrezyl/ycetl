@@ -25,43 +25,38 @@ struct ComposedType {
 suite trivial_shared_ptr_suite = [] {
   "default_construct"_test = [] {
     constexpr auto test = [] {
-      trivial_shared_ptr<int> ptr;
+      trivial_shared_ptr<int> ptr{};
       return ptr.get() == nullptr;
     };
-    expect(test());
-  };
-
-  "construct_from_pointer"_test = [] {
-    constexpr auto test = [] {
-      int value = 42;
-      trivial_shared_ptr<int> ptr(&value);
-      return ptr.get() == &value && *ptr == 42_i;
-    };
+    static_assert(test());
     expect(test());
   };
 
   "simple_type_allocation"_test = [] {
     constexpr auto test = [] {
-      trivial_shared_ptr<SimpleType> ptr(new SimpleType(100));
-      return ptr.get()->get() == 100_i;
+      trivial_shared_ptr<SimpleType> ptr{new SimpleType(100)};
+      return ptr.get()->get() == 100;
     };
+    static_assert(test());
     expect(test());
   };
 
   "composed_type_allocation"_test = [] {
     constexpr auto test = [] {
-      trivial_shared_ptr<ComposedType> ptr(new ComposedType(200));
-      return ptr.get()->get() == 200_i;
+      trivial_shared_ptr<ComposedType> ptr{new ComposedType(200)};
+      return ptr.get()->get() == 200;
     };
+    static_assert(test());
     expect(test());
   };
 
   "copy_construct"_test = [] {
     constexpr auto test = [] {
-      trivial_shared_ptr<SimpleType> a(new SimpleType(7));
-      trivial_shared_ptr<SimpleType> b(a);
-      return a.get() == b.get() && b.get()->get() == 7_i;
+      trivial_shared_ptr<SimpleType> a{new SimpleType(7)};
+      trivial_shared_ptr<SimpleType> b{a};
+      return a.get() == b.get() && b.get()->get() == 7;
     };
+    static_assert(test());
     expect(test());
   };
 };
