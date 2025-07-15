@@ -175,7 +175,27 @@ suite vector_suite = [] {
     };
     expect(test());
   };
+#if 0
   "nested_vectors"_test = [] {
+    constexpr auto test = [] {
+      using outer_vector_t = ycetl::vector<ycetl::vector<int>>;
+      outer_vector_t outer_vec{};
+
+      using inner_vector_t = ycetl::vector<int>;
+
+      inner_vector_t inner_vec{};
+      inner_vec.push_back(42);
+      inner_vec.push_back(43);
+
+      outer_vec.push_back(inner_vec);
+
+      return outer_vec.size() == 1_u && outer_vec[0].size() == 2_u &&
+             outer_vec[0][0] == 42_i && outer_vec[0][1] == 43_i;
+    };
+    expect(test());
+  };
+#endif
+  "nested_vectors_with_allocator"_test = [] {
     constexpr auto test = [] {
       using relevant_types =
           ycetl::relevant_types_t<ycetl::vector<ycetl::vector<int>>>;

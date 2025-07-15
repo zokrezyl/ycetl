@@ -19,7 +19,7 @@ template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
 /* iterator --------------------------------------------------------------- */
 template <class T, class Memory, bool Const> class vector_iterator {
-  using storage_unit = storage_type_of_t<T>;
+  using storage_unit = backend_type_of_t<T>;
   using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
   raw _ptr = nullptr;
   Memory *_memory = nullptr;

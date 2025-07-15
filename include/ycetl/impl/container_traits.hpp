@@ -7,20 +7,20 @@ namespace ycetl {
 //
 // for types that do not declare the backend_type, the storage type is the type
 // itself
-template <typename T, typename = void> struct storage_type_of {
+template <typename T, typename = void> struct backend_type_of {
   using type = T;
 };
 
-// may be confusing, but we are using two notions here, storage_type and
+// may be confusing, but we are using two notions here, backend_type and
 // backend_type for nested containers, for instance from the outer containers
 // perspective the storage type of inner T is not relevant, the inner container
 // declares it as its own backend type
 template <typename T>
-struct storage_type_of<T, std::void_t<typename T::storage_type>> {
+struct backend_type_of<T, std::void_t<typename T::backend_type>> {
   using type = typename T::backend_type;
 };
 
 template <typename T>
-using storage_type_of_t = typename storage_type_of<T>::type;
+using backend_type_of_t = typename backend_type_of<T>::type;
 
 } // namespace ycetl

@@ -11,14 +11,14 @@ namespace container {
 // Common base container trait
 template <typename T,
           typename Memory =
-              default_memory<relevant_types_t<T, storage_type_of_t<T>>>>
+              default_memory<relevant_types_t<T, backend_type_of_t<T>>>>
 class container {
 public:
-  using storage_unit = storage_type_of_t<T>;
+  using storage_unit = backend_type_of_t<T>;
   using backend_type = dynamic_array<storage_unit>;
   using relevant_of = relevant_types_t<storage_unit, T>;
   using default_memory =
-      ::ycetl::default_memory<relevant_types_t<T, storage_type_of_t<T>>>;
+      ::ycetl::default_memory<relevant_types_t<T, backend_type_of_t<T>>>;
 };
 
 #if 0
