@@ -1,11 +1,10 @@
 #include <iostream>
 #include <type_traits>
 #include <ycetl/impl/type_printer.hpp>
+#include <ycetl/type_system.hpp>
 
-using namespace ycetl::print;
 
-// A compile-time sequence of types
-template <typename... Ts> struct type_set {};
+namespace ycetl {
 
 // type_set_tail: all but the first element
 template <typename Set> struct type_set_tail;
@@ -79,6 +78,11 @@ struct type_set_back<type_set<Head, Rest...>> {
 // Alias for easier usage
 template <typename Set>
 using type_set_back_t = typename type_set_back<Set>::type;
+
+}
+
+using namespace ycetl;
+using ycetl::print::print;
 
 // ---------------------------------------------------------------------
 
