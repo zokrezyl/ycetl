@@ -24,38 +24,38 @@ template <typename T> class dynamic_array {
 public:
   constexpr dynamic_array() = default;
 
-  template <class Alloc> constexpr explicit dynamic_array(Alloc &) {}
+  template <class Memory> constexpr explicit dynamic_array(Memory &) {}
 
   /* sized construction --------------------------------------------------- */
-  template <class Alloc>
-  constexpr dynamic_array(Alloc &a, std::size_t n)
+  template <class Memory>
+  constexpr dynamic_array(Memory &a, std::size_t n)
       : _data(allocate<T>(a, n)), _size(n), _capacity(n) {
     for (std::size_t i = 0; i < n; ++i)
       construct(i);
   }
 
-  template <class Alloc>
-  constexpr dynamic_array(Alloc &a, std::size_t n, const T &v)
+  template <class Memory>
+  constexpr dynamic_array(Memory &a, std::size_t n, const T &v)
       : _data(allocate<T>(a, n)), _size(n), _capacity(n) {
     for (std::size_t i = 0; i < n; ++i)
       construct(i, v);
   }
 
-  template <class Alloc, class It>
-  constexpr dynamic_array(Alloc &a, It first, std::size_t n)
+  template <class Memory, class It>
+  constexpr dynamic_array(Memory &a, It first, std::size_t n)
       : _data(allocate<T>(a, n)), _size(n), _capacity(n) {
     for (std::size_t i = 0; i < n; ++i)
       construct(i, *(first + i));
   }
 
   /* 1. copy‑construct from another dynamic_array using the same allocator */
-  template <class Alloc>
-  constexpr dynamic_array(Alloc &a, const dynamic_array &other)
+  template <class Memory>
+  constexpr dynamic_array(Memory &a, const dynamic_array &other)
       : dynamic_array(a, other.begin(), other.size()) {}
 
   /* 2. construct from initializer_list */
-  template <class Alloc>
-  constexpr dynamic_array(Alloc &a, std::initializer_list<T> il)
+  template <class Memory>
+  constexpr dynamic_array(Memory &a, std::initializer_list<T> il)
       : dynamic_array(a, il.begin(), il.size()) {}
 
   /* move semantics ------------------------------------------------------- */
@@ -94,7 +94,8 @@ public:
   constexpr const T *end() const { return _data + _size; }
 
   /* reserve -------------------------------------------------------------- */
-  template <class Alloc> constexpr void reserve(Alloc &a, std::size_t new_cap) {
+  template <class Memory>
+  constexpr void reserve(Memory &a, std::size_t new_cap) {
     if (new_cap <= _capacity)
       return;
     T *new_buf = allocate<T>(a, new_cap);
@@ -106,7 +107,8 @@ public:
   }
 
   /* resize --------------------------------------------------------------- */
-  template <class Alloc> constexpr void resize(Alloc &a, std::size_t new_size) {
+  template <class Memory>
+  constexpr void resize(Memory &a, std::size_t new_size) {
     if (new_size < _size) {
       destroy_range(new_size, _size);
       _size = new_size;
@@ -119,27 +121,27 @@ public:
   }
 
   /* modifiers ------------------------------------------------------------ */
-  template <class Alloc, class... Args>
-  constexpr T *emplace_back(Alloc &a, Args &&...args) {
+  template <class Memory, class... Args>
+  constexpr T *emplace_back(Memory &a, Args &&...args) {
     if (_size == _capacity)
       reserve(a, _capacity ? _capacity * 2 : 4);
     construct(_size, std::forward<Args>(args)...);
     return _data + _size++;
   }
 
-  template <class Alloc> constexpr void push_back(Alloc &a, const T &v) {
+  template <class Memory> constexpr void push_back(Memory &a, const T &v) {
     emplace_back(a, v);
   }
 
-  template <class Alloc> constexpr void push_back(Alloc &a, T &&v) {
+  template <class Memory> constexpr void push_back(Memory &a, T &&v) {
     emplace_back(a, std::move(v));
   }
 
-  template <class Alloc> constexpr void push_back(const T &v) {
+  template <class Memory> constexpr void push_back(const T &v) {
     emplace_back(v);
   }
 
-  template <class Alloc> constexpr void push_back(T &&v) {
+  template <class Memory> constexpr void push_back(T &&v) {
     emplace_back(std::move(v));
   }
 
@@ -154,7 +156,7 @@ public:
   }
 
   /* insert --------------------------------------------------------------- */
-  template <class Alloc> constexpr T *insert(Alloc &a, T *pos, const T &v) {
+  template <class Memory> constexpr T *insert(Memory &a, T *pos, const T &v) {
     std::size_t idx = pos - _data;
     if (_size == _capacity)
       reserve(a, _capacity ? _capacity * 2 : 4);

@@ -15,7 +15,7 @@ template <typename T,
 class container {
 public:
   using storage_unit = storage_type_of_t<T>;
-  using storage_type = dynamic_array<storage_unit>;
+  using backend_type = dynamic_array<storage_unit>;
   using relevant_of = relevant_types_t<storage_unit, T>;
   using default_memory =
       ::ycetl::default_memory<relevant_types_t<T, storage_type_of_t<T>>>;

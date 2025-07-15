@@ -9,3 +9,5 @@ _deps/
 build.ninja
 cmake_install.cmake
 compile_commands.json
+errors.err
+CTestTestfile.cmake

@@ -12,17 +12,17 @@
 
 namespace ycetl {
 
-template <class T, class Alloc> class vector;
+template <class T, class Memory> class vector;
 /* detect nested vector --------------------------------------------------- */
 template <class> struct is_vector : std::false_type {};
 template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
 /* iterator --------------------------------------------------------------- */
-template <class T, class Alloc, bool Const> class vector_iterator {
+template <class T, class Memory, bool Const> class vector_iterator {
   using storage_unit = storage_type_of_t<T>;
   using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
   raw _ptr = nullptr;
-  Alloc *_alloc = nullptr;
+  Memory *_memory = nullptr;
 
 public:
   using iterator_category = std::random_access_iterator_tag;
@@ -31,16 +31,16 @@ public:
   using reference = value_type;
 
   constexpr vector_iterator() = default;
-  constexpr vector_iterator(raw p, Alloc *a) : _ptr(p), _alloc(a) {}
+  constexpr vector_iterator(raw p, Memory *a) : _ptr(p), _memory(a) {}
 
   template <bool C = Const, typename = std::enable_if_t<!C>>
-  constexpr operator vector_iterator<T, Alloc, true>() const {
-    return {_ptr, _alloc};
+  constexpr operator vector_iterator<T, Memory, true>() const {
+    return {_ptr, _memory};
   }
 
   constexpr value_type operator*() const {
     if constexpr (is_vector<T>::value)
-      return T(*_alloc, const_cast<storage_unit &>(*_ptr));
+      return T(*_memory, const_cast<storage_unit &>(*_ptr));
     else
       return *_ptr;
   }
@@ -109,8 +109,8 @@ class vector : public container::container<T, Memory> {
 public:
 public:
   using base_type = container::container<T, Memory>;
+  using typename base_type::backend_type;
   using typename base_type::relevant_of;
-  using typename base_type::storage_type;
   using typename base_type::storage_unit;
   using memory_type = Memory;
 
@@ -120,58 +120,60 @@ public:
   using const_iterator = vec_citer<T, Memory>;
 
 private:
-  owned_pointer<Memory> _alloc_ptr;
-  owned_pointer<storage_type> _storage;
+  owned_pointer<Memory> _memory_ptr;
+  owned_pointer<backend_type> _backend;
 
 public:
   // constructor for internal use only
-  constexpr vector(storage_type &storage, Memory &alloc)
-      : _alloc_ptr(&alloc), _storage(&storage) {}
+  constexpr vector(backend_type &backend, Memory &memory)
+      : _memory_ptr(&memory), _backend(&backend) {}
 
-  constexpr Memory &alloc() { return *_alloc_ptr; }
-  constexpr const Memory &alloc() const { return *_alloc_ptr; }
+  constexpr Memory &memory() { return *_memory_ptr; }
+  constexpr const Memory &memory() const { return *_memory_ptr; }
 
   template <class, class> friend class vector;
 
-  /* constructors (unchanged bodies, but _storage calls stay correct) */
-  constexpr vector() : _alloc_ptr(), _storage() {}
-  explicit constexpr vector(Memory &a) : _alloc_ptr(&a), _storage() {}
+  /* constructors (unchanged bodies, but _backend calls stay correct) */
+  constexpr vector() : _memory_ptr(), _backend() {}
+  explicit constexpr vector(Memory &a) : _memory_ptr(&a), _backend() {}
 
   constexpr vector(size_type n, const T &v)
-      : _alloc_ptr(), _storage(alloc(), n, v) {}
+      : _memory_ptr(), _backend(memory(), n, v) {}
   constexpr vector(size_type n, const T &v, Memory &a)
-      : _alloc_ptr(&a), _storage(alloc(), n, v) {}
-  explicit constexpr vector(size_type n) : _alloc_ptr(), _storage(alloc(), n) {}
+      : _memory_ptr(&a), _backend(memory(), n, v) {}
+  explicit constexpr vector(size_type n)
+      : _memory_ptr(), _backend(memory(), n) {}
   constexpr vector(size_type n, Memory &a)
-      : _alloc_ptr(&a), _storage(alloc(), n) {}
+      : _memory_ptr(&a), _backend(memory(), n) {}
 
   constexpr vector(std::initializer_list<T> il)
-      : _alloc_ptr(), _storage(alloc(), il) {}
+      : _memory_ptr(), _backend(memory(), il) {}
   constexpr vector(std::initializer_list<T> il, Memory &a)
-      : _alloc_ptr(&a), _storage(alloc(), il) {}
+      : _memory_ptr(&a), _backend(memory(), il) {}
 
   template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>>
   constexpr vector(It f, It l)
-      : _alloc_ptr(),
-        _storage(alloc(), f, static_cast<size_type>(std::distance(f, l))) {}
+      : _memory_ptr(),
+        _backend(memory(), f, static_cast<size_type>(std::distance(f, l))) {}
   template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>,
             typename = void>
   constexpr vector(It f, It l, Memory &a)
-      : _alloc_ptr(&a),
-        _storage(alloc(), f, static_cast<size_type>(std::distance(f, l))) {}
+      : _memory_ptr(&a),
+        _backend(memory(), f, static_cast<size_type>(std::distance(f, l))) {}
 
   constexpr vector(const vector &o)
-      : _alloc_ptr(), _storage(alloc(), *o._storage) {}
+      : _memory_ptr(), _backend(memory(), *o._backend) {}
   constexpr vector(const vector &o, Memory &a)
-      : _alloc_ptr(&a), _storage(alloc(), *o._storage) {}
+      : _memory_ptr(&a), _backend(memory(), *o._backend) {}
 
   constexpr vector(vector &&o) noexcept
-      : _alloc_ptr(std::move(o._alloc_ptr)), _storage(std::move(o._storage)) {}
+      : _memory_ptr(std::move(o._memory_ptr)), _backend(std::move(o._backend)) {
+  }
 
-  constexpr vector(vector &&o, Memory &a) : _alloc_ptr(&a), _storage() {
+  constexpr vector(vector &&o, Memory &a) : _memory_ptr(&a), _backend() {
     reserve(o.size());
-    for (auto &e : *o._storage)
-      _storage->push_back(alloc(), std::move(e));
+    for (auto &e : *o._backend)
+      _backend->push_back(memory(), std::move(e));
     o.clear();
   }
 
@@ -179,77 +181,78 @@ public:
 
   /* capacity ----------------------------------------------------------- */
   constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _storage->size(); }
-  constexpr size_type capacity() const noexcept { return _storage->capacity(); }
+  constexpr size_type size() const noexcept { return _backend->size(); }
+  constexpr size_type capacity() const noexcept { return _backend->capacity(); }
 
-  constexpr void reserve(size_type n) { _storage->reserve(alloc(), n); }
-  constexpr void resize(size_type n) { _storage->resize(alloc(), n); }
-  constexpr void clear() { _storage->clear(); }
+  constexpr void reserve(size_type n) { _backend->reserve(memory(), n); }
+  constexpr void resize(size_type n) { _backend->resize(memory(), n); }
+  constexpr void clear() { _backend->clear(); }
 
   /* element access ----------------------------------------------------- */
   constexpr T operator[](size_type i) {
     if constexpr (is_vector<T>::value)
-      return T((*_storage)[i], alloc());
+      return T((*_backend)[i], memory());
     else
-      return (*_storage)[i];
+      return (*_backend)[i];
   }
 
   constexpr const T operator[](size_type i) const {
     if constexpr (is_vector<T>::value)
-      return T((*_storage)[i], alloc());
+      return T((*_backend)[i], memory());
     else
-      return (*_storage)[i];
+      return (*_backend)[i];
   }
 
   /* modifiers ---------------------------------------------------------- */
   constexpr void push_back(const T &v) {
     if constexpr (is_vector<T>::value)
-      // the first alloc() is for the vector itself, the second for the back-end
-      _storage->emplace_back(alloc(), alloc(), *v._storage); // copy back‑end
+      // the first memory() is for the vector itself, the second for the
+      // back-end
+      _backend->emplace_back(memory(), memory(), *v._backend); // copy back‑end
     else
-      _storage->push_back(alloc(), v);
+      _backend->push_back(memory(), v);
   }
   constexpr void push_back(T &&v) {
     if constexpr (is_vector<T>::value)
-      _storage->emplace_back(alloc(), std::move(*v._storage)); // move back‑end
+      _backend->emplace_back(memory(), std::move(*v._backend)); // move back‑end
     else
-      _storage->push_back(alloc(), std::move(v));
+      _backend->push_back(memory(), std::move(v));
   }
 
   /*
   template <class... Args> constexpr T &emplace_back(Args &&...args) {
-    return *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
+    return *_backend->emplace_back(memory(), std::forward<Args>(args)...);
   }
   */
   template <class... Args> constexpr auto emplace_back(Args &&...args) {
     if constexpr (is_vector<T>::value) {
       auto &inner_ref =
-          *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
-      return T(inner_ref, alloc());
+          *_backend->emplace_back(memory(), std::forward<Args>(args)...);
+      return T(inner_ref, memory());
     } else {
-      return (*_storage->emplace_back(alloc(), std::forward<Args>(args)...));
+      return (*_backend->emplace_back(memory(), std::forward<Args>(args)...));
     }
   }
 
   constexpr iterator insert(iterator pos, const T &val) {
     size_type idx = pos - begin();
     if constexpr (is_vector<T>::value)
-      _storage->insert(alloc(), _storage->begin() + idx, *val._storage);
+      _backend->insert(memory(), _backend->begin() + idx, *val._backend);
     else
-      _storage->insert(alloc(), _storage->begin() + idx, val);
-    return iterator(_storage->begin() + idx, &alloc());
+      _backend->insert(memory(), _backend->begin() + idx, val);
+    return iterator(_backend->begin() + idx, &memory());
   }
 
-  constexpr void pop_back() { _storage->pop_back(); }
+  constexpr void pop_back() { _backend->pop_back(); }
 
   /* iterators ---------------------------------------------------------- */
-  constexpr iterator begin() noexcept { return {_storage->begin(), &alloc()}; }
-  constexpr iterator end() noexcept { return {_storage->end(), &alloc()}; }
+  constexpr iterator begin() noexcept { return {_backend->begin(), &memory()}; }
+  constexpr iterator end() noexcept { return {_backend->end(), &memory()}; }
   constexpr const_iterator begin() const noexcept {
-    return {_storage->begin(), &alloc()};
+    return {_backend->begin(), &memory()};
   }
   constexpr const_iterator end() const noexcept {
-    return {_storage->end(), &alloc()};
+    return {_backend->end(), &memory()};
   }
 };
 
