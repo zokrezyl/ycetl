@@ -4,85 +4,7 @@
 #include <ycetl/type_system.hpp>
 
 
-namespace ycetl {
-
-// type_set_tail: all but the first element
-template <typename Set> struct type_set_tail;
-
-// Empty and singleton cases yield an empty type_set
-template <> struct type_set_tail<type_set<>> {
-  using type = type_set<>;
-};
-
-template <typename T> struct type_set_tail<type_set<T>> {
-  using type = type_set<>;
-};
-
-// General case: strip off the first type
-template <typename T, typename... Rest>
-struct type_set_tail<type_set<T, Rest...>> {
-  using type = type_set<Rest...>;
-};
-
-// Alias for easier usage
-template <typename Set>
-using type_set_tail_t = typename type_set_tail<Set>::type;
-
-// Helper: concatenation of two type_sets
-template <typename S1, typename S2> struct type_set_concat;
-
-template <typename... A, typename... B>
-struct type_set_concat<type_set<A...>, type_set<B...>> {
-  using type = type_set<A..., B...>;
-};
-
-// type_set_init: all but the last element
-template <typename Set> struct type_set_init;
-
-// Empty and singleton cases yield an empty type_set
-template <> struct type_set_init<type_set<>> {
-  using type = type_set<>;
-};
-
-template <typename T> struct type_set_init<type_set<T>> {
-  using type = type_set<>;
-};
-
-// Recursive case: take the first element and append init of the rest
-template <typename T, typename... Rest>
-struct type_set_init<type_set<T, Rest...>> {
-  using type = typename type_set_concat<
-      type_set<T>, typename type_set_init<type_set<Rest...>>::type>::type;
-};
-
-// Alias for easier usage
-template <typename Set>
-using type_set_init_t = typename type_set_init<Set>::type;
-
-// ---------------------- NEW: back (last element) ----------------------
-
-// type_set_back: pick out the very last type in a non-empty type_set
-template <typename Set> struct type_set_back;
-
-// Base case: singleton holds the last element
-template <typename T> struct type_set_back<type_set<T>> {
-  using type = T;
-};
-
-// Recursive case: peel off head until only one remains
-template <typename Head, typename... Rest>
-struct type_set_back<type_set<Head, Rest...>> {
-  using type = typename type_set_back<type_set<Rest...>>::type;
-};
-
-// Alias for easier usage
-template <typename Set>
-using type_set_back_t = typename type_set_back<Set>::type;
-
-}
-
 using namespace ycetl;
-using ycetl::print::print;
 
 // ---------------------------------------------------------------------
 
@@ -112,10 +34,13 @@ int main() {
   using init = type_set_init_t<input>;
   using back = type_set_back_t<input>;
 
-  print<input>(); // prints: int, double, char
+  ycetl::print::print<input>(); // prints: int, double, char
+  //
+  #if 0 
   print<tail>();  // prints: double, char
   print<init>();  // prints: int, double
   print<back>();  // prints: char
+  #endif
 
   return 0;
 }
