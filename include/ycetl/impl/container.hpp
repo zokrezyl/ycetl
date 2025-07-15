@@ -2,7 +2,7 @@
 #include <ycetl/dynamic_array.hpp>
 #include <ycetl/impl/container_traits.hpp>
 #include <ycetl/memory.hpp>
-#include <ycetl/relevant_types.hpp>
+#include <ycetl/type_system.hpp>
 
 // defines common traits for containers
 namespace ycetl {
