@@ -39,12 +39,6 @@ constexpr int test0() {
   }
 }
 
-/*
-* vector<vector<int>> v;
-* v[0] will return instead of 'vector<int> &' 'vector<int>'
-* vector<A> a;
-* a[0] will return instead of 'A &' 'A'
-*/
 
 template <typename T>
 class container_impl {
@@ -71,8 +65,6 @@ public:
     }
     return *this;
   }
-  
-
 };
 
 template <typename T>
@@ -97,7 +89,6 @@ public:
     }
     return *this;
   }
-  
 };
 
 constexpr container<int> make_container() {
@@ -116,9 +107,7 @@ struct simple_inner {
   constexpr simple_inner(const simple_inner &other) {
       ptr = new int(*other.ptr);
   }
-
 };
-
 
 struct simple_container {
   simple_inner *ptr;
@@ -143,10 +132,16 @@ constexpr auto test( ) {
   return *sc.ptr->ptr; // Should return 42
 };
 
+constexpr auto test_container() {
+  container<int> c;
+  return c;
+}
 
 int main() {
   constexpr auto result = test();
   std::cout << "Result: " << result << std::endl;
+
+  constexpr auto c = create_sc();
 }
 
 

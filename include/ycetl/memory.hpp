@@ -14,7 +14,7 @@ template <typename T> class owned_pointer {
   bool _owned = true;
 
 public:
-  constexpr owned_pointer() : _ptr(new T) {}
+  constexpr owned_pointer() : _ptr(new T()) {}
   template <typename... Args>
   constexpr owned_pointer(Args &&...args)
       : _ptr(new T(std::forward<Args>(args)...)) {}
