@@ -201,4 +201,15 @@ template <typename T> using as_pointers_t = typename as_pointers<T>::type;
 using original = type_set<int, char, double>;
 using pointers = as_pointers<original>;
 
+template <template <typename> typename Wrapper, typename TypeSet>
+struct apply_wrapper;
+
+template <template <typename> typename Wrapper, typename... Ts>
+struct apply_wrapper<Wrapper, type_set<Ts...>> {
+  using type = type_set<Wrapper<Ts>...>;
+};
+
+template <template <typename> typename Wrapper, typename TypeSet>
+using apply_wrapper_t = typename apply_wrapper<Wrapper, TypeSet>::type;
+
 } // namespace ycetl
