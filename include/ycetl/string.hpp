@@ -14,15 +14,15 @@ namespace ycetl {
 // clang-format off
 template <typename CharT, 
           typename Traits = std::char_traits<CharT>,
-          typename Allocator = typename container::container<CharT>::default_allocator>
+          typename Memory = typename container::container<CharT>::default_memory>
 // clang-format on
-class string : public container::container<CharT, Allocator> {
+class string : public container::container<CharT, Memory> {
 public:
-  using base_type = container::container<CharT, Allocator>;
+  using base_type = container::container<CharT, Memory>;
   using typename base_type::relevant_of;
   using typename base_type::storage_type;
   using typename base_type::storage_unit;
-  using allocator_type = Allocator;
+  using memory_type = Memory;
 
   using value_type = CharT;
   using traits_type = Traits;
@@ -31,43 +31,44 @@ public:
   using const_iterator = const storage_unit *;
 
 private:
-  owned_pointer<Allocator> _alloc_ptr;
+  owned_pointer<Memory> _memory_ptr;
   owned_pointer<storage_type> _storage;
 
 public:
   // Internal constructor
-  constexpr string(storage_type &storage, Allocator &alloc)
-      : _alloc_ptr(&alloc), _storage(&storage) {}
+  constexpr string(storage_type &storage, Memory &alloc)
+      : _memory_ptr(&alloc), _storage(&storage) {}
 
-  constexpr Allocator &alloc() { return *_alloc_ptr; }
-  constexpr const Allocator &alloc() const { return *_alloc_ptr; }
+  constexpr Memory &alloc() { return *_memory_ptr; }
+  constexpr const Memory &alloc() const { return *_memory_ptr; }
 
   /* constructors */
-  constexpr string() : _alloc_ptr(), _storage() {}
-  explicit constexpr string(Allocator &a) : _alloc_ptr(&a), _storage() {}
+  constexpr string() : _memory_ptr(), _storage() {}
+  explicit constexpr string(Memory &a) : _memory_ptr(&a), _storage() {}
 
   constexpr string(const CharT *s)
-      : _alloc_ptr(), _storage(alloc(), s, Traits::length(s)) {}
+      : _memory_ptr(), _storage(alloc(), s, Traits::length(s)) {}
 
-  constexpr string(const CharT *s, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), s, Traits::length(s)) {}
+  constexpr string(const CharT *s, Memory &a)
+      : _memory_ptr(&a), _storage(alloc(), s, Traits::length(s)) {}
 
   constexpr string(std::initializer_list<CharT> il)
-      : _alloc_ptr(), _storage(alloc(), il) {}
+      : _memory_ptr(), _storage(alloc(), il) {}
 
-  constexpr string(std::initializer_list<CharT> il, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), il) {}
+  constexpr string(std::initializer_list<CharT> il, Memory &a)
+      : _memory_ptr(&a), _storage(alloc(), il) {}
 
   constexpr string(const string &o)
-      : _alloc_ptr(), _storage(alloc(), *o._storage) {}
+      : _memory_ptr(), _storage(alloc(), *o._storage) {}
 
-  constexpr string(const string &o, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), *o._storage) {}
+  constexpr string(const string &o, Memory &a)
+      : _memory_ptr(&a), _storage(alloc(), *o._storage) {}
 
   constexpr string(string &&o) noexcept
-      : _alloc_ptr(std::move(o._alloc_ptr)), _storage(std::move(o._storage)) {}
+      : _memory_ptr(std::move(o._memory_ptr)), _storage(std::move(o._storage)) {
+  }
 
-  constexpr string(string &&o, Allocator &a) : _alloc_ptr(&a), _storage() {
+  constexpr string(string &&o, Memory &a) : _memory_ptr(&a), _storage() {
     reserve(o.size());
     for (auto &e : *o._storage)
       _storage->push_back(alloc(), std::move(e));

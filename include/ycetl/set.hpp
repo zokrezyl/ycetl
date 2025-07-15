@@ -13,15 +13,15 @@ namespace ycetl {
 // clang-format off
 template <typename Key,
           typename Compare = std::less<Key>,
-          typename Allocator = typename container::container<Key>::default_allocator>
+          typename Memory = typename container::container<Key>::default_memory>
 // clang-format on
-class set : public container::container<Key, Allocator> {
+class set : public container::container<Key, Memory> {
 public:
-  using base_type = container::container<Key, Allocator>;
+  using base_type = container::container<Key, Memory>;
   using typename base_type::relevant_of;
   using typename base_type::storage_type;
   using typename base_type::storage_unit;
-  using allocator_type = Allocator;
+  using memory_type = Memory;
 
   using key_type = Key;
   using value_type = Key;
@@ -31,46 +31,46 @@ public:
   using key_compare = Compare;
 
 private:
-  owned_pointer<Allocator> _alloc_ptr;
+  owned_pointer<Memory> _memory_ptr;
   owned_pointer<storage_type> _storage;
 
   key_compare _comp;
 
 public:
   // Internal constructor
-  constexpr set(storage_type &storage, Allocator &alloc)
-      : _alloc_ptr(&alloc), _storage(&storage), _comp() {}
+  constexpr set(storage_type &storage, Memory &alloc)
+      : _memory_ptr(&alloc), _storage(&storage), _comp() {}
 
-  constexpr Allocator &alloc() { return *_alloc_ptr; }
-  constexpr const Allocator &alloc() const { return *_alloc_ptr; }
+  constexpr Memory &alloc() { return *_memory_ptr; }
+  constexpr const Memory &alloc() const { return *_memory_ptr; }
 
   /* constructors */
-  constexpr set() : _alloc_ptr(), _storage(), _comp() {}
-  explicit constexpr set(Allocator &a) : _alloc_ptr(&a), _storage(), _comp() {}
+  constexpr set() : _memory_ptr(), _storage(), _comp() {}
+  explicit constexpr set(Memory &a) : _memory_ptr(&a), _storage(), _comp() {}
 
-  constexpr set(std::initializer_list<Key> il, Allocator &a)
-      : _alloc_ptr(&a), _storage() {
+  constexpr set(std::initializer_list<Key> il, Memory &a)
+      : _memory_ptr(&a), _storage() {
     for (const auto &e : il)
       insert(e); // use insert to maintain uniqueness & sorting
   }
 
-  constexpr set(std::initializer_list<Key> il) : _alloc_ptr(), _storage() {
+  constexpr set(std::initializer_list<Key> il) : _memory_ptr(), _storage() {
     for (const auto &e : il)
       insert(e);
   }
 
   constexpr set(const set &o)
-      : _alloc_ptr(), _storage(alloc(), *o._storage), _comp(o._comp) {}
+      : _memory_ptr(), _storage(alloc(), *o._storage), _comp(o._comp) {}
 
-  constexpr set(const set &o, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), *o._storage), _comp(o._comp) {}
+  constexpr set(const set &o, Memory &a)
+      : _memory_ptr(&a), _storage(alloc(), *o._storage), _comp(o._comp) {}
 
   constexpr set(set &&o) noexcept
-      : _alloc_ptr(std::move(o._alloc_ptr)), _storage(std::move(o._storage)),
+      : _memory_ptr(std::move(o._memory_ptr)), _storage(std::move(o._storage)),
         _comp(std::move(o._comp)) {}
 
-  constexpr set(set &&o, Allocator &a)
-      : _alloc_ptr(&a), _storage(), _comp(o._comp) {
+  constexpr set(set &&o, Memory &a)
+      : _memory_ptr(&a), _storage(), _comp(o._comp) {
     for (auto &e : *o._storage)
       insert(std::move(e));
     o.clear();

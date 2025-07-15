@@ -3,8 +3,8 @@
 // #include <cstring>
 #include <memory>
 // #include <ycetl/allocator_traits.hpp>
-#include <ycetl/impl/dynamic_allocator.hpp>
-#include <ycetl/impl/multitype_allocator.hpp>
+#include <ycetl/impl/dynamic_memory.hpp>
+#include <ycetl/impl/multitype_memory.hpp>
 #include <ycetl/types.hpp>
 
 namespace ycetl {
@@ -53,20 +53,19 @@ public:
   constexpr const T *operator->() const { return _ptr; }
 };
 
-template <typename T, typename MultitypeAllocator>
-constexpr T *allocate(MultitypeAllocator &alloc, std::size_t n) {
+template <typename T, typename MultitypeMemory>
+constexpr T *allocate(MultitypeMemory &alloc, std::size_t n) {
   return alloc.template allocate<T>(n);
 }
 
 template <typename TypeSet>
-using multitype_dynamic_allocator =
-    ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator,
-                                         TypeSet>;
+using multitype_dynamic_memory =
+    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, TypeSet>;
 
 //
 template <typename T>
-using default_allocator =
-    ::ycetl::memory::multitype_allocator<::ycetl::memory::dynamic_allocator, T>;
+using default_memory =
+    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, T>;
 
 namespace memory {
 #if 0

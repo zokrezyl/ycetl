@@ -103,51 +103,51 @@ template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 /*──────────────────────────── vector ─────────────────────────────────────*/
 // clang-format off
 template <typename T, 
-typename Allocator = typename container::container<T>::default_allocator>
+typename Memory = typename container::container<T>::default_memory>
 // clang-format on
-class vector : public container::container<T, Allocator> {
+class vector : public container::container<T, Memory> {
 public:
 public:
-  using base_type = container::container<T, Allocator>;
+  using base_type = container::container<T, Memory>;
   using typename base_type::relevant_of;
   using typename base_type::storage_type;
   using typename base_type::storage_unit;
-  using allocator_type = Allocator;
+  using memory_type = Memory;
 
   using value_type = T;
   using size_type = std::size_t;
-  using iterator = vec_iter<T, Allocator>;
-  using const_iterator = vec_citer<T, Allocator>;
+  using iterator = vec_iter<T, Memory>;
+  using const_iterator = vec_citer<T, Memory>;
 
 private:
-  owned_pointer<Allocator> _alloc_ptr;
+  owned_pointer<Memory> _alloc_ptr;
   owned_pointer<storage_type> _storage;
 
 public:
   // constructor for internal use only
-  constexpr vector(storage_type &storage, Allocator &alloc)
+  constexpr vector(storage_type &storage, Memory &alloc)
       : _alloc_ptr(&alloc), _storage(&storage) {}
 
-  constexpr Allocator &alloc() { return *_alloc_ptr; }
-  constexpr const Allocator &alloc() const { return *_alloc_ptr; }
+  constexpr Memory &alloc() { return *_alloc_ptr; }
+  constexpr const Memory &alloc() const { return *_alloc_ptr; }
 
   template <class, class> friend class vector;
 
   /* constructors (unchanged bodies, but _storage calls stay correct) */
   constexpr vector() : _alloc_ptr(), _storage() {}
-  explicit constexpr vector(Allocator &a) : _alloc_ptr(&a), _storage() {}
+  explicit constexpr vector(Memory &a) : _alloc_ptr(&a), _storage() {}
 
   constexpr vector(size_type n, const T &v)
       : _alloc_ptr(), _storage(alloc(), n, v) {}
-  constexpr vector(size_type n, const T &v, Allocator &a)
+  constexpr vector(size_type n, const T &v, Memory &a)
       : _alloc_ptr(&a), _storage(alloc(), n, v) {}
   explicit constexpr vector(size_type n) : _alloc_ptr(), _storage(alloc(), n) {}
-  constexpr vector(size_type n, Allocator &a)
+  constexpr vector(size_type n, Memory &a)
       : _alloc_ptr(&a), _storage(alloc(), n) {}
 
   constexpr vector(std::initializer_list<T> il)
       : _alloc_ptr(), _storage(alloc(), il) {}
-  constexpr vector(std::initializer_list<T> il, Allocator &a)
+  constexpr vector(std::initializer_list<T> il, Memory &a)
       : _alloc_ptr(&a), _storage(alloc(), il) {}
 
   template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>>
@@ -156,19 +156,19 @@ public:
         _storage(alloc(), f, static_cast<size_type>(std::distance(f, l))) {}
   template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>,
             typename = void>
-  constexpr vector(It f, It l, Allocator &a)
+  constexpr vector(It f, It l, Memory &a)
       : _alloc_ptr(&a),
         _storage(alloc(), f, static_cast<size_type>(std::distance(f, l))) {}
 
   constexpr vector(const vector &o)
       : _alloc_ptr(), _storage(alloc(), *o._storage) {}
-  constexpr vector(const vector &o, Allocator &a)
+  constexpr vector(const vector &o, Memory &a)
       : _alloc_ptr(&a), _storage(alloc(), *o._storage) {}
 
   constexpr vector(vector &&o) noexcept
       : _alloc_ptr(std::move(o._alloc_ptr)), _storage(std::move(o._storage)) {}
 
-  constexpr vector(vector &&o, Allocator &a) : _alloc_ptr(&a), _storage() {
+  constexpr vector(vector &&o, Memory &a) : _alloc_ptr(&a), _storage() {
     reserve(o.size());
     for (auto &e : *o._storage)
       _storage->push_back(alloc(), std::move(e));
