@@ -38,9 +38,15 @@ suite multitype_memory_suite = [] {
           original_mem.handler_type::template downgrade<apply_wrapper_t<
               trivial_shared_ptr,
               apply_wrapper_t<dynamic_memory, downgraded_types>>>());
+
+      int *ptr = downgraded_mem.allocate<int>(3);
+      bool result = ptr != nullptr;
+
+      downgraded_mem.deallocate(ptr);
+      return result;
     };
-    expect(test());
   };
+  expect(test());
 };
 
 int main(int, char **) { return 0; }

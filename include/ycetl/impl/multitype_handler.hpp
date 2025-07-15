@@ -33,6 +33,9 @@ public:
   using handled_types = type_set<Ts...>;
   constexpr multitype_handler() = default;
 
+  constexpr explicit multitype_handler(HandlerImpl<Ts>... handlers)
+      : _handlers(handlers...) {}
+
   template <typename T> constexpr HandlerImpl<T> &get_handler() {
     static_assert(type_in_typeset<T, type_set<Ts...>>::value,
                   "requested handler type is not present in the type_set");
