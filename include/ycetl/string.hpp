@@ -39,30 +39,30 @@ public:
   constexpr string(backend_type &backend, Memory &memory)
       : _memory_ptr(&memory), _backend(&backend) {}
 
-  constexpr Memory &alloc() { return *_memory_ptr; }
-  constexpr const Memory &alloc() const { return *_memory_ptr; }
+  constexpr Memory &memory() { return *_memory_ptr; }
+  constexpr const Memory &memory() const { return *_memory_ptr; }
 
   /* constructors */
   constexpr string() : _memory_ptr(), _backend() {}
   explicit constexpr string(Memory &a) : _memory_ptr(&a), _backend() {}
 
   constexpr string(const CharT *s)
-      : _memory_ptr(), _backend(alloc(), s, Traits::length(s)) {}
+      : _memory_ptr(), _backend(memory(), s, Traits::length(s)) {}
 
   constexpr string(const CharT *s, Memory &a)
-      : _memory_ptr(&a), _backend(alloc(), s, Traits::length(s)) {}
+      : _memory_ptr(&a), _backend(memory(), s, Traits::length(s)) {}
 
   constexpr string(std::initializer_list<CharT> il)
-      : _memory_ptr(), _backend(alloc(), il) {}
+      : _memory_ptr(), _backend(memory(), il) {}
 
   constexpr string(std::initializer_list<CharT> il, Memory &a)
-      : _memory_ptr(&a), _backend(alloc(), il) {}
+      : _memory_ptr(&a), _backend(memory(), il) {}
 
   constexpr string(const string &o)
-      : _memory_ptr(), _backend(alloc(), *o._backend) {}
+      : _memory_ptr(), _backend(memory(), *o._backend) {}
 
   constexpr string(const string &o, Memory &a)
-      : _memory_ptr(&a), _backend(alloc(), *o._backend) {}
+      : _memory_ptr(&a), _backend(memory(), *o._backend) {}
 
   constexpr string(string &&o) noexcept
       : _memory_ptr(std::move(o._memory_ptr)), _backend(std::move(o._backend)) {
@@ -71,7 +71,7 @@ public:
   constexpr string(string &&o, Memory &a) : _memory_ptr(&a), _backend() {
     reserve(o.size());
     for (auto &e : *o._backend)
-      _backend->push_back(alloc(), std::move(e));
+      _backend->push_back(memory(), std::move(e));
     o.clear();
   }
 
@@ -82,9 +82,9 @@ public:
   constexpr size_type size() const noexcept { return _backend->size(); }
   constexpr size_type capacity() const noexcept { return _backend->capacity(); }
 
-  constexpr void reserve(size_type n) { _backend->reserve(alloc(), n); }
+  constexpr void reserve(size_type n) { _backend->reserve(memory(), n); }
   constexpr void resize(size_type n, CharT c = CharT()) {
-    _backend->resize(alloc(), n, c);
+    _backend->resize(memory(), n, c);
   }
   constexpr void clear() { _backend->clear(); }
 
@@ -109,10 +109,10 @@ public:
   }
 
   /* modifiers ---------------------------------------------------------- */
-  constexpr void push_back(CharT c) { _backend->push_back(alloc(), c); }
+  constexpr void push_back(CharT c) { _backend->push_back(memory(), c); }
 
   template <class... Args> constexpr CharT &emplace_back(Args &&...args) {
-    return *_backend->emplace_back(alloc(), std::forward<Args>(args)...);
+    return *_backend->emplace_back(memory(), std::forward<Args>(args)...);
   }
 
   constexpr void pop_back() { _backend->pop_back(); }

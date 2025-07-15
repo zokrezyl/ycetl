@@ -175,7 +175,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#if 0
   "nested_vectors"_test = [] {
     constexpr auto test = [] {
       using relevant_types =
@@ -200,7 +199,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#endif
 };
 #if 0
 constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
