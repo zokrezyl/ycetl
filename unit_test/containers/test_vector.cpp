@@ -175,7 +175,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#if 0
   "nested_vectors"_test = [] {
     constexpr auto test = [] {
       using outer_vector_t = ycetl::vector<ycetl::vector<int>>;
@@ -194,7 +193,6 @@ suite vector_suite = [] {
     };
     expect(test());
   };
-#endif
   "nested_vectors_with_allocator"_test = [] {
     constexpr auto test = [] {
       using relevant_types =

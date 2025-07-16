@@ -124,9 +124,11 @@ private:
   owned_pointer<backend_type> _backend;
 
 public:
-  // constructor for internal use only
-  constexpr vector(backend_type &backend, Memory &memory)
-      : _memory_ptr(&memory), _backend(&backend) {}
+  // special constructor mainly used for nested containers
+  // the inner container will get a  downgraded multitype memory
+  template <typename OtherMemory>
+  constexpr vector(backend_type &backend, OtherMemory &other_memory)
+      : _memory_ptr(other_memory), _backend(&backend) {}
 
   constexpr Memory &memory() { return *_memory_ptr; }
   constexpr const Memory &memory() const { return *_memory_ptr; }
