@@ -17,7 +17,7 @@ template <typename Key,
 // clang-format on
 class set : public container::container<set, Key, Memory> {
 public:
-  using base_type = container::container<Key, Memory>;
+  using base_type = container::container<set, Key, Memory>;
   using typename base_type::backend_type;
   using typename base_type::relevant_of;
   using typename base_type::storage_unit;

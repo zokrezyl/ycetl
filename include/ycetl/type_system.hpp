@@ -212,9 +212,7 @@ struct apply_wrapper<Wrapper, type_set<Ts...>> {
 template <template <typename> typename Wrapper, typename TypeSet>
 using apply_wrapper_t = typename apply_wrapper<Wrapper, TypeSet>::type;
 
-template <typename... Ts> struct template_arguments_t {
-  template <template <typename...> typename T> using apply = T<Ts...>;
-};
+template <typename... Ts> using template_arguments_t = type_set<Ts...>;
 
 template <template <typename... Args> typename Template, typename... Ts>
 class template_info {
@@ -276,12 +274,24 @@ inline constexpr bool has_rebindable_memory_v =
 // Alias template to rebind the memory type of a rebindable template.
 // It assumes the memory type is the last argument in the template's argument
 // list.
+template <typename T_Rebindable, typename NewMemory,
+          bool = is_template_rebindable_v<T_Rebindable>>
+struct rebind_memory_helper {
+  using type = T_Rebindable; // fallback if not rebindable
+};
+
 template <typename T_Rebindable, typename NewMemory>
-using rebind_memory_t = rebind_template_t<
-    T_Rebindable,
-    ycetl::type_set_concat_t<
-        ycetl::type_set_init_t<typename T_Rebindable::template_arguments>,
-        NewMemory>>;
+struct rebind_memory_helper<T_Rebindable, NewMemory, true> {
+  using type = rebind_template_t<
+      T_Rebindable,
+      type_set_concat_t<
+          type_set_init_t<typename T_Rebindable::template_arguments>,
+          type_set<NewMemory>>>;
+};
+
+template <typename T_Rebindable, typename NewMemory>
+using rebind_memory_t =
+    typename rebind_memory_helper<T_Rebindable, NewMemory>::type;
 
 // helpers to extract storage type from a container type
 // this is used to calculato the storage type for all the nested containers

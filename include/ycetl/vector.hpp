@@ -103,12 +103,12 @@ template <class T, class A> using vec_citer = vector_iterator<T, A, true>;
 /*──────────────────────────── vector ─────────────────────────────────────*/
 // clang-format off
 template <typename T, 
-typename Memory = typename container::container<vector, T>::default_memory>
+typename Memory = typename container::container_traits<T>::default_memory>
 // clang-format on
 class vector : public container::container<vector, T, Memory> {
 public:
 public:
-  using base_type = container::container<T, Memory>;
+  using base_type = container::container<vector, T, Memory>;
   using typename base_type::backend_type;
   using typename base_type::relevant_of;
   using typename base_type::storage_unit;

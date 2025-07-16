@@ -46,7 +46,7 @@ public:
   using memory_type = Memory;
   using storage_unit = typename container_traits<T>::storage_unit;
   using backend_type = typename container_traits<T>::backend_type;
-  using relevant_types_t = typename container_traits<T>::relevant_of;
+  using relevant_of = typename container_traits<T>::relevant_of;
 
   // --- Static Asserts to verify consistency ---
   // These checks ensure that the rebinding mechanism does not alter the
