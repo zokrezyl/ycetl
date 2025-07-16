@@ -223,61 +223,15 @@ public:
   using template_arguments = template_arguments_t<Ts...>;
 };
 
-// --- NEW HELPER TRAITS FOR ROBUST SFINAE ---
-// Helper to detect if T::template_type is a valid template alias
-// It attempts to instantiate T::template_type to check if it's a template.
-template <typename T, template <typename...> class = T::template_type>
-struct has_template_type_alias_helper : std::true_type {};
+template <typename T_Rebindable, typename NewTypeSet, typename Enable = void>
+struct rebind_template {};
 
-template <typename T>
-struct has_template_type_alias_helper<T, void> : std::false_type {
-}; // Default for no match
-
-template <typename T>
-inline constexpr bool has_template_type_alias_v =
-    has_template_type_alias_helper<T>::value;
-
-// Helper to detect if T::template_arguments is a valid type alias
-template <typename T, typename = void>
-struct has_template_arguments_alias_helper : std::false_type {};
-
-template <typename T>
-struct has_template_arguments_alias_helper<
-    T, std::void_t<typename T::template_arguments>> : std::true_type {};
-
-template <typename T>
-inline constexpr bool has_template_arguments_alias_v =
-    has_template_arguments_alias_helper<T>::value;
-// --- END NEW HELPER TRAITS ---
-
-// Helper to detect if a type T exposes template_type and template_arguments
-// This now uses the new, more robust helper traits.
-template <typename T>
-inline constexpr bool is_template_rebindable_v =
-    (std::is_class_v<T> || std::is_union_v<T>) && // Must be a class/union
-    has_template_type_alias_v<T> &&    // Check for template_type alias
-    has_template_arguments_alias_v<T>; // Check for template_arguments alias
-
-// Primary template for the rebind_template action.
-// It takes the type to be rebound (T_Rebindable) and the new set of template
-// arguments.
-template <typename T_Rebindable, typename NewTypeSet,
-          typename Enable = void> // Added Enable for SFINAE
-struct rebind_template {};        // Not defined for arbitrary types
-
-// Specialization for types that inherit from ycetl::template_info.
-// This specialization is now enabled using the correct
-// `is_template_rebindable_v` trait.
 template <typename T_Rebindable, typename NewTypeSet>
-struct rebind_template<T_Rebindable, NewTypeSet,
-                       std::enable_if_t<ycetl::is_template_rebindable_v<
-                           T_Rebindable>> // Use the trait directly
-                       > {
-  // Apply T_Rebindable's original template_type to the new arguments.
-  // NewTypeSet is expected to have an 'apply' member that takes a template.
-  // FIX: Pass T_Rebindable::template_type as a template, not a type.
-  using type = typename NewTypeSet::template apply<
-      T_Rebindable::template_type>; // Direct access, passing template
+struct rebind_template<
+    T_Rebindable, NewTypeSet,
+    std::enable_if_t<ycetl::is_template_rebindable_v<T_Rebindable>>> {
+  using type =
+      typename NewTypeSet::template apply<T_Rebindable::template template_type>;
 };
 
 // Helper alias template for convenience.

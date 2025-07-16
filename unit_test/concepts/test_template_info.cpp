@@ -1,21 +1,29 @@
+#include <cxxabi.h>
+#include <iostream>
+#include <memory>
 #include <type_traits>
+#include <typeinfo>
 
-// general detection trait using void_t
+// Helper function for demangling type names at runtime
+std::string demangle(const char *name) {
+  int status = -1;
+  std::unique_ptr<char, void (*)(void *)> res{
+      abi::__cxa_demangle(name, NULL, NULL, &status), std::free};
+  return (status == 0) ? res.get() : name;
+}
+
+// --- Your trait and rebinding logic ---
 template <typename, typename = void>
-struct has_template_arguments : std::false_type {};
+struct is_template_rebindable : std::false_type {};
 
 template <typename T>
-struct has_template_arguments<T, std::void_t<typename T::template_arguments>>
+struct is_template_rebindable<T, std::void_t<typename T::template_arguments>>
     : std::true_type {};
-
-template <typename, typename = void>
-struct has_template_type : std::false_type {};
 
 template <typename T>
-struct has_template_type<T, std::void_t<typename T::template_type<int>>>
-    : std::true_type {};
+inline constexpr bool is_template_rebindable_v =
+    is_template_rebindable<T>::value;
 
-// Example classes
 template <typename... Ts> struct template_arguments_t {
   template <template <typename...> typename T> using apply = T<Ts...>;
 };
@@ -26,28 +34,47 @@ struct template_info {
   using template_arguments = template_arguments_t<Ts...>;
 };
 
-// Class that inherits from template_info
+template <typename T_Rebindable, typename NewTypeSet, typename Enable = void>
+struct rebind_template {};
+
+template <typename T_Rebindable, typename NewTypeSet>
+struct rebind_template<
+    T_Rebindable, NewTypeSet,
+    std::enable_if_t<is_template_rebindable_v<T_Rebindable>>> {
+  using type =
+      typename NewTypeSet::template apply<T_Rebindable::template template_type>;
+};
+
 template <typename... Args> class A : public template_info<A, Args...> {};
 
 // Class not inheriting from template_info
 class B {};
 
-// Tests
-static_assert(has_template_arguments<A<int, double>>::value,
-              "A should have template_arguments");
-static_assert(has_template_type<A<int, double>>::value,
-              "A should have template_type");
+// Usage examples
+static_assert(is_template_rebindable_v<A<int, double>>,
+              "A should be template rebindable");
+static_assert(!is_template_rebindable_v<B>,
+              "B should NOT be template rebindable");
+static_assert(!is_template_rebindable_v<int>,
+              "int should NOT be template rebindable");
 
-static_assert(!has_template_arguments<B>::value,
-              "B should NOT have template_arguments");
-static_assert(!has_template_type<B>::value, "B should NOT have template_type");
+// Example class
+template <typename... Args> struct Example : template_info<Example, Args...> {};
 
-static_assert(!has_template_type<int>::value,
-              "int should NOT have template_type");
-static_assert(!has_template_type<double>::value,
-              "double should NOT have template_type");
-
+// --- Runtime test in main ---
 int main() {
-  // The static assertions will ensure that the code is correct at compile time.
+  using original = Example<int, float>;
+  using new_types = template_arguments_t<double, bool>;
+
+  using rebound = rebind_template<original, new_types>::type;
+
+  std::cout << "Original type: " << demangle(typeid(original).name()) << '\n';
+  std::cout << "Rebound type : " << demangle(typeid(rebound).name()) << '\n';
+
+  if constexpr (std::is_same_v<rebound, Example<double, bool>>)
+    std::cout << "Runtime check: Rebinding succeeded!\n";
+  else
+    std::cout << "Runtime check: Rebinding failed!\n";
+
   return 0;
 }
