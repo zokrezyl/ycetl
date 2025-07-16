@@ -15,6 +15,7 @@ suite set_suite = [] {
       set<int, std::less<int>, memory_t> s(memory);
       return s.empty() && s.size() == 0_u;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -26,6 +27,7 @@ suite set_suite = [] {
       set<int, std::less<int>, memory_t> s({3, 1, 2}, memory);
       return s.size() == 3_u && s.contains(1) && s.contains(2) && s.contains(3);
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -41,6 +43,7 @@ suite set_suite = [] {
       return s.size() == 3_u && s.contains(10) && s.contains(5) &&
              s.contains(15);
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -53,6 +56,7 @@ suite set_suite = [] {
       set<int, std::less<int>, memory_t> b = a;
       return b.size() == 3_u && b.contains(2);
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -65,6 +69,7 @@ suite set_suite = [] {
       set<int, std::less<int>, memory_t> b = std::move(a);
       return b.size() == 2_u && b.contains(4) && b.contains(5);
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -78,6 +83,7 @@ suite set_suite = [] {
       s.insert(42);
       return s.size() == 1_u && s.contains(42);
     };
+    static_assert(test());
     expect(test());
   };
 };

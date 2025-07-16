@@ -23,7 +23,7 @@ suite multitype_memory_suite = [] {
 
       return true;
     };
-
+    static_assert(test());
     expect(test());
   };
 };

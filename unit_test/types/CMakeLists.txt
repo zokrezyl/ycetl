@@ -34,8 +34,6 @@ add_compile_definitions(FMT_USE_CONSTEXPR)
 add_compile_definitions(FMT_USE_CONSTEXPR_STRING)
 
 set(SKIP_TESTS
-test_multitype_memory
-
 )
 
 foreach(test_file ${TEST_SOURCES})

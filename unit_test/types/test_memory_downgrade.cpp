@@ -37,6 +37,7 @@ suite multitype_memory_downgrade_suite = [] {
       return int_ptr[0] == 42 && int_ptr[4] == 100;
     };
 
+    static_assert(test());
     expect(test());
   };
 
@@ -72,6 +73,7 @@ suite multitype_memory_downgrade_suite = [] {
       return same_instance && allocation_correct;
     };
 
+    static_assert(test());
     expect(test());
   };
 };

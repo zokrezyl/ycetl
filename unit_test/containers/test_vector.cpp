@@ -30,6 +30,7 @@ suite vector_suite = [] {
       vector<int, decltype(memory)> v(memory);
       return v.size() == 0_u && v.capacity() == 0_u;
     };
+    static_assert(test());
     expect(test());
   };
   "vector_with_size"_test = [] {
@@ -39,6 +40,7 @@ suite vector_suite = [] {
           8, memory); // Creates 8 default-initialized elements
       return v.size() == 8_u && v.capacity() >= 8_u;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -49,6 +51,7 @@ suite vector_suite = [] {
       v.reserve(8);
       return v.size() == 0_u && v.capacity() == 8_u;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -61,6 +64,7 @@ suite vector_suite = [] {
         p.push_back(i);
       return p.size() == 4_u && p[3] == 3_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -73,6 +77,7 @@ suite vector_suite = [] {
         p.push_back(i);
       return p.size() == 100_u && p[99] == 99_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -84,6 +89,7 @@ suite vector_suite = [] {
       vector<int, decltype(memory)> v(5, 42, memory);
       return v.size() == 5_u && v[0] == 42_i && v[4] == 42_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -97,6 +103,7 @@ suite vector_suite = [] {
       vector<int, decltype(memory)> b = a;
       return b.size() == 3_u && b[0] == 10_i && b[2] == 30_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -109,6 +116,7 @@ suite vector_suite = [] {
       vector<int, decltype(memory)> b = std::move(a);
       return b.size() == 2_u && b[0] == 7_i && b[1] == 8_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -122,6 +130,7 @@ suite vector_suite = [] {
       v.push_back(42);
       return v.size() == 1_u && v[0] == 42_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -132,6 +141,7 @@ suite vector_suite = [] {
       return v.size() == 3_u && v[1] == 2_i;
     };
     expect(test());
+    static_assert(test());
   };
 #if 0
   "forward_iterator_construct"_test = [] {
@@ -151,6 +161,7 @@ suite vector_suite = [] {
       v.insert(v.begin() + 2, 3);
       return v.size() == 4_u && v[2] == 3_i && v[3] == 4_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -163,6 +174,7 @@ suite vector_suite = [] {
       v.emplace_back(9, 10);
       return v.size() == 1_u && v[0].first == 9_i && v[0].second == 10_i;
     };
+    static_assert(test());
     expect(test());
   };
 
@@ -173,6 +185,7 @@ suite vector_suite = [] {
       v.push_back(Test(42));
       return v.size() == 1_u && v[0].value == 42_i;
     };
+    static_assert(test());
     expect(test());
   };
   "nested_vectors"_test = [] {
@@ -191,6 +204,7 @@ suite vector_suite = [] {
       return outer_vec.size() == 1_u && outer_vec[0].size() == 2_u &&
              outer_vec[0][0] == 42_i && outer_vec[0][1] == 43_i;
     };
+    static_assert(test());
     expect(test());
   };
   "nested_vectors_with_allocator"_test = [] {
@@ -215,6 +229,7 @@ suite vector_suite = [] {
       return outer_vec.size() == 1_u && outer_vec[0].size() == 2_u &&
              outer_vec[0][0] == 42_i && outer_vec[0][1] == 43_i;
     };
+    static_assert(test());
     expect(test());
   };
 };

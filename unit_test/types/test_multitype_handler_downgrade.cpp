@@ -26,6 +26,7 @@ suite multitype_handler_downgrade_suite = [] {
              smaller_handler.get_handler<char>().value() == sizeof(char);
     };
 
+    static_assert(test());
     expect(test());
   };
 };

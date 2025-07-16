@@ -90,6 +90,7 @@ constexpr auto test_11() {
 
 
 int main() {
+  constexpr auto result_1111 = test_1111();
   constexpr auto result_00 = test_00();
   static_assert(result_00 == 2, "Test 0 failed");
   constexpr auto result_01 = test_01();
