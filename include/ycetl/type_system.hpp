@@ -223,13 +223,24 @@ public:
   using template_arguments = template_arguments_t<Ts...>;
 };
 
+template <typename, typename = void>
+struct is_template_rebindable : std::false_type {};
+
+template <typename T>
+struct is_template_rebindable<T, std::void_t<typename T::template_arguments>>
+    : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_template_rebindable_v =
+    is_template_rebindable<T>::value;
+
 template <typename T_Rebindable, typename NewTypeSet, typename Enable = void>
 struct rebind_template {};
 
 template <typename T_Rebindable, typename NewTypeSet>
 struct rebind_template<
     T_Rebindable, NewTypeSet,
-    std::enable_if_t<ycetl::is_template_rebindable_v<T_Rebindable>>> {
+    std::enable_if_t<is_template_rebindable_v<T_Rebindable>>> {
   using type =
       typename NewTypeSet::template apply<T_Rebindable::template template_type>;
 };
