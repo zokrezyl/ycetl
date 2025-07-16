@@ -220,7 +220,6 @@ suite vector_suite = [] {
     expect(test());
   };
 };
-#if 0
 constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
   /*  outer and inner vectors both use the library’s default_memory   */
   using vec_t = ycetl::vector<ycetl::vector<int>>;
@@ -242,7 +241,6 @@ constexpr ycetl::vector<ycetl::vector<int>> make_vector() {
 
   return vec; // copy‑elided, still constexpr
 }
-#endif
 
 constexpr ycetl::vector<int> make_vector_simple() {
   /*  outer and inner vectors both use the library’s default_memory   */
