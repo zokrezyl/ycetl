@@ -6,7 +6,7 @@ using namespace ycetl;
 
 struct SimpleType {
   int *value{};
-  constexpr SimpleType(int v) : value(new int(v)) {}
+  constexpr SimpleType(int v = 0) : value(new int(v)) {}
   constexpr ~SimpleType() { delete value; }
 
   constexpr int get() const { return *value; }
@@ -14,7 +14,7 @@ struct SimpleType {
 
 struct ComposedType {
   SimpleType *simple{};
-  constexpr ComposedType(int v) : simple(new SimpleType(v)) {}
+  constexpr ComposedType(int v = 0) : simple(new SimpleType(v)) {}
   constexpr ~ComposedType() { delete simple; }
 
   constexpr int get() const { return simple->get(); }
@@ -23,7 +23,7 @@ struct ComposedType {
 struct NestedComposedType {
   trivial_shared_ptr<SimpleType> ptr{};
 
-  constexpr NestedComposedType(int v) : ptr(new SimpleType(v)) {}
+  constexpr NestedComposedType(int v = 0) : ptr(new SimpleType(v)) {}
 
   constexpr int get() const { return ptr->get(); }
 };
@@ -32,7 +32,7 @@ suite trivial_shared_ptr_suite = [] {
   "default_construct"_test = [] {
     constexpr auto test = [] {
       trivial_shared_ptr<int> ptr{};
-      return ptr.get() == nullptr;
+      return ptr.get() != nullptr && *(ptr.get()) == 0;
     };
     static_assert(test());
     expect(test());
@@ -76,4 +76,4 @@ suite trivial_shared_ptr_suite = [] {
   };
 };
 
-int main(int argc, char **argv) { return 0; }
+int main(int, char **) { return 0; }

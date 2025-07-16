@@ -1,26 +1,3 @@
 #pragma once
 
-namespace ycetl {
-// helpers to extract storage type from a container type
-// this is used to calculato the storage type for all the nested containers
-//
-//
-// for types that do not declare the backend_type, the storage type is the type
-// itself
-template <typename T, typename = void> struct backend_type_of {
-  using type = T;
-};
-
-// may be confusing, but we are using two notions here, backend_type and
-// backend_type for nested containers, for instance from the outer containers
-// perspective the storage type of inner T is not relevant, the inner container
-// declares it as its own backend type
-template <typename T>
-struct backend_type_of<T, std::void_t<typename T::backend_type>> {
-  using type = typename T::backend_type;
-};
-
-template <typename T>
-using backend_type_of_t = typename backend_type_of<T>::type;
-
-} // namespace ycetl
+namespace ycetl {} // namespace ycetl

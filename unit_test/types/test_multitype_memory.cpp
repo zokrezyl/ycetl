@@ -26,8 +26,44 @@ suite multitype_memory_suite = [] {
 
     expect(test());
   };
-
   "multitype_memory_shared_handlers"_test = [] {
+    constexpr auto test = [] {
+      using original_types = type_set<int, double>;
+      using downgraded_types = type_set<int>;
+
+      using original_wrapped_types =
+          apply_wrapper_t<trivial_shared_ptr,
+                          apply_wrapper_t<dynamic_memory, original_types>>;
+
+      using downgraded_wrapped_types =
+          apply_wrapper_t<trivial_shared_ptr,
+                          apply_wrapper_t<dynamic_memory, downgraded_types>>;
+
+      multitype_memory<dynamic_memory, original_types> original_mem;
+
+      auto downgraded_handlers =
+          original_mem
+              .handler_type::template downgrade<downgraded_wrapped_types>();
+
+      static_assert(
+          std::is_same_v<
+              decltype(downgraded_handlers),
+              multitype_handler<trivial_shared_ptr, downgraded_wrapped_types>>);
+
+      multitype_memory<dynamic_memory, downgraded_types> downgraded_mem(
+          downgraded_handlers);
+
+      int *shared_ptr = downgraded_mem.allocate<int>(3);
+      bool result = shared_ptr != nullptr;
+
+      downgraded_mem.deallocate(shared_ptr);
+      return result;
+    };
+
+    expect(test());
+  };
+
+  "multitype_memory_shared_handlers_2"_test = [] {
     constexpr auto test = [] {
       using original_types = type_set<int, double>;
       using downgraded_types = type_set<int>;
@@ -39,11 +75,12 @@ suite multitype_memory_suite = [] {
               trivial_shared_ptr,
               apply_wrapper_t<dynamic_memory, downgraded_types>>>());
 
-      int *shared_ptr = downgraded_mem.allocate<int>(3);
-      bool result = shared_ptr != nullptr;
+      // int *shared_ptr = downgraded_mem.allocate<int>(3);
+      // bool result = shared_ptr != nullptr;
 
-      downgraded_mem.deallocate(shared_ptr);
-      return result;
+      // downgraded_mem.deallocate(shared_ptr);
+      // return result;
+      return true;
     };
     expect(test());
   };

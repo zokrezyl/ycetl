@@ -13,9 +13,9 @@ namespace ycetl {
 // clang-format off
 template <typename Key,
           typename Compare = std::less<Key>,
-          typename Memory = typename container::container<Key>::default_memory>
+          typename Memory = typename container::container_traits<Key>::default_memory>
 // clang-format on
-class set : public container::container<Key, Memory> {
+class set : public container::container<set, Key, Memory> {
 public:
   using base_type = container::container<Key, Memory>;
   using typename base_type::backend_type;

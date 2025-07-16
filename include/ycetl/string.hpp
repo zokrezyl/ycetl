@@ -11,14 +11,17 @@
 namespace ycetl {
 
 /*─────────────────────────────── string ────────────────────────────────*/
+
+// clang-format on
+
 // clang-format off
 template <typename CharT, 
           typename Traits = std::char_traits<CharT>,
-          typename Memory = typename container::container<CharT>::default_memory>
+          typename Memory = typename container::container_traits<CharT>::default_memory>
 // clang-format on
-class string : public container::container<CharT, Memory> {
+class string : public container::container<string, CharT, Memory> {
 public:
-  using base_type = container::container<CharT, Memory>;
+  using base_type = container::container<string, CharT, Memory>;
   using typename base_type::backend_type;
   using typename base_type::relevant_of;
   using typename base_type::storage_unit;
