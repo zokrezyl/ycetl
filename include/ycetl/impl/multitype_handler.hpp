@@ -32,6 +32,11 @@ private:
   std::tuple<HandlerImpl<Ts>...> _handlers;
 
 public:
+  template <typename LargerSet>
+  constexpr multitype_handler(
+      const multitype_handler<HandlerImpl, LargerSet> &larger_handler)
+      : _handlers(larger_handler.template get_handler<Ts>()...) {}
+
   using handled_types = type_set<Ts...>;
   // Default constructor
   constexpr multitype_handler() = default;
