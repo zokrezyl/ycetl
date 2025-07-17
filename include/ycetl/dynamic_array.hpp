@@ -41,6 +41,11 @@ public:
     using pointer = pointer_type;
     using reference = reference_type;
 
+    friend constexpr basic_iterator operator+(difference_type n,
+                                              basic_iterator it) noexcept {
+      return it + n;
+    }
+
     constexpr basic_iterator(T *p = nullptr) noexcept : _ptr(p) {}
 
     operator basic_iterator<true>() const noexcept
