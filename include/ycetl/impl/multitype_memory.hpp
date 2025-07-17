@@ -27,17 +27,6 @@ public:
 
 #endif
 
-#if 0
-template <template <typename> class MemoryBackend, typename... Ts>
-constexpr auto make_shared_handlers(type_set<Ts...>) {
-  return multitype_handler<
-      trivial_shared_ptr,
-      apply_wrapper_t<trivial_shared_ptr,
-                      apply_wrapper_t<MemoryBackend, type_set<Ts...>>>>{
-      trivial_shared_ptr<MemoryBackend<Ts>>(new MemoryBackend<Ts>{})...};
-}
-#endif
-
 template <template <typename> class MemoryBackend, typename TypeSet>
 class multitype_memory
     : public multitype_handler<

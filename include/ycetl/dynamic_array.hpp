@@ -22,7 +22,8 @@ template <typename T> class dynamic_array {
   }
 
 public:
-  constexpr dynamic_array() = default;
+  // constexpr dynamic_array(): data{} {} ;
+  constexpr dynamic_array() = delete;
 
   template <class Memory> constexpr explicit dynamic_array(Memory &) {}
 
