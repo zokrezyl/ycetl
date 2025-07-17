@@ -8,6 +8,7 @@ template <typename T> class trivial_shared_ptr {
   std::size_t *count{};
 
 public:
+  using element_type = T;
   constexpr trivial_shared_ptr() : ptr(new T{}), count(new std::size_t(1)) {}
 
   constexpr explicit trivial_shared_ptr(T *p)

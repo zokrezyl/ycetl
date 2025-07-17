@@ -10,6 +10,19 @@
 
 namespace ycetl {
 
+template <typename T>
+class allocator_shared_ptr : public trivial_shared_ptr<T> {
+  using element_type = T::element_type;
+
+  constexpr element_type *allocate(std::size_t n) {
+    return this->get()->allocate(n);
+  }
+
+  constexpr void deallocate(element_type *p, std::size_t n) {
+    this->get()->deallocate(p, n);
+  }
+};
+
 template <typename T> class owned_pointer {
   T *_ptr = nullptr;
   bool _owned = true;
@@ -63,10 +76,13 @@ template <typename TypeSet>
 using multitype_dynamic_memory =
     ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, TypeSet>;
 
-//
+template <typename T>
+using shared_dynamic_memory =
+    ::ycetl::allocator_shared_ptr<::ycetl::memory::dynamic_memory<T>>;
+
 template <typename T>
 using default_memory =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, T>;
+    ::ycetl::memory::multitype_memory<shared_dynamic_memory, T>;
 
 template <typename T>
 using static_memory_t =

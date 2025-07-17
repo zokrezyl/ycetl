@@ -9,13 +9,23 @@
 
 namespace ycetl {
 
+template <typename T, typename Compare, typename Memory, typename BackendMode>
+class set;
+;
+
+template <typename Key, typename Compare = std::less<Key>,
+          typename Memory = typename container::container_traits<
+              set, Key, Compare>::default_memory,
+          typename BackendMode = container::by_value>
+class set;
 /*─────────────────────────────── set ──────────────────────────────────*/
 // clang-format off
 template <typename Key,
-          typename Compare = std::less<Key>,
-          typename Memory = typename container::container_traits<Key>::default_memory>
+          typename Compare ,
+          typename Memory,
+typename BackendMode>
 // clang-format on
-class set : public container::container<set, Key, Memory> {
+class set {
 public:
   using base_type = container::container<set, Key, Memory>;
   using typename base_type::backend_type;

@@ -8,7 +8,6 @@
 namespace ycetl {
 namespace memory {
 
-#if 0
 template <template <typename> class MemoryBackend, typename TypeSet>
 class multitype_memory : public multitype_handler<MemoryBackend, TypeSet> {
 public:
@@ -22,30 +21,6 @@ public:
   // Single object deallocation
   template <typename T> constexpr void deallocate(T *p) {
     this->template get_handler<T>().deallocate(p);
-  }
-};
-
-#endif
-
-template <template <typename> class MemoryBackend, typename TypeSet>
-class multitype_memory
-    : public multitype_handler<
-          trivial_shared_ptr,
-          apply_wrapper_t<trivial_shared_ptr,
-                          apply_wrapper_t<MemoryBackend, TypeSet>>> {
-public:
-  using type_set = TypeSet;
-
-  template <typename T> constexpr T *allocate(std::size_t n) {
-    return this->template get_handler<trivial_shared_ptr<MemoryBackend<T>>>()
-        ->get()
-        ->allocate(n);
-  }
-
-  template <typename T> constexpr void deallocate(T *p) {
-    this->template get_handler<trivial_shared_ptr<MemoryBackend<T>>>()
-        ->get()
-        ->deallocate(p);
   }
 };
 

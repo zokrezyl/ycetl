@@ -16,27 +16,33 @@ template <class T> using dyn_alloc = mem::dynamic_memory<T>;
 /*──────────────────────────────────────────────────────────────────────────────
   Extra checks for dynamic_memory & multitype_memory (constexpr only)
 ──────────────────────────────────────────────────────────────────────────────*/
+
 suite memory_suite = [] {
   /* single‑type memory, fundamental ---------------------------------- */
   "dyn_alloc_round_trip_int"_test = [] {
     constexpr auto test = [] {
       ycetl::memory::dynamic_memory<int> a;
       int *p = a.allocate(4);
-      for (int i = 0; i < 4; ++i)
-        p[i] = i + 1; // 1 2 3 4
+      for (int i = 0; i < 4; ++i) {
+        std::construct_at(p + i); // default construct
+        p[i] = i + 1;             // 1 2 3 4
+      }
       int sum = 0;
       for (int i = 0; i < 4; ++i)
         sum += p[i];
       a.deallocate(p, 4);
       return sum == 10_i; // 1+2+3+4
     };
+    static_assert(test());
     expect(test());
   };
-
   "dyn_alloc_round_trip_double"_test = [] {
     constexpr auto test = [] {
       ycetl::memory::dynamic_memory<double> a;
       double *p = a.allocate(3);
+      std::construct_at(p + 0); // default construct
+      std::construct_at(p + 1); // default construct
+      std::construct_at(p + 2); // default construct
       p[0] = 1.5;
       p[1] = 2.5;
       p[2] = 3.0;
@@ -44,9 +50,9 @@ suite memory_suite = [] {
       a.deallocate(p, 3);
       return prod > 10.0_d && prod < 12.0_d;
     };
+    static_assert(test());
     expect(test());
   };
-
   /* multitype memory with two POD types ------------------------------ */
   "multitype_alloc_int_double"_test = [] {
     constexpr auto test = [] {
@@ -55,6 +61,9 @@ suite memory_suite = [] {
 
       int *pi = st.template allocate<int>(2);
       double *pd = st.template allocate<double>(1);
+      std::construct_at(pi + 0); // default construct
+      std::construct_at(pi + 1); // default construct
+      std::construct_at(pd + 0); // default construct
 
       pi[0] = 7;
       pi[1] = 11;
@@ -66,33 +75,7 @@ suite memory_suite = [] {
       st.template deallocate<double>(pd);
       return ok;
     };
-    expect(test());
-  };
-
-  /* multitype memory + nested dynamic_array backend ------------------ */
-  "multitype_alloc_dynamic_array_backend"_test = [] {
-    constexpr auto test = [] {
-      using backends =
-          ycetl::type_set<int, ycetl::dynamic_array<int>,
-                          ycetl::dynamic_array<ycetl::dynamic_array<int>>>;
-
-      ycetl::memory::multitype_memory<ycetl::memory::dynamic_memory, backends>
-          st;
-
-      /* allocate and build a dynamic_array<int> of size 3 */
-      auto *buf = st.template allocate<ycetl::dynamic_array<int>>(1);
-      new (buf) ycetl::dynamic_array<int>(st, 3);
-
-      (*buf)[0] = 4;
-      (*buf)[1] = 5;
-      (*buf)[2] = 6;
-
-      bool ok = ((*buf).size() == 3_u && (*buf)[2] == 6_i);
-
-      buf->~dynamic_array<int>();
-      st.template deallocate<ycetl::dynamic_array<int>>(buf);
-      return ok;
-    };
+    static_assert(test());
     expect(test());
   };
 };

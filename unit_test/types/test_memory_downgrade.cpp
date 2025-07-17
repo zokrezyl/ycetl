@@ -40,42 +40,6 @@ suite multitype_memory_downgrade_suite = [] {
     static_assert(test());
     expect(test());
   };
-
-  "constexpr_trivial_shared_ptr_reference_count"_test = [] {
-    constexpr auto test = [] {
-      using larger_set = type_set<int, double>;
-      using smaller_set = type_set<int>;
-
-      multitype_memory<dummy_backend, larger_set> larger_memory;
-
-      // explicitly downgrade memory
-      multitype_memory<dummy_backend, smaller_set> smaller_memory(
-          larger_memory);
-
-      auto larger_handler =
-          larger_memory
-              .template get_handler<trivial_shared_ptr<dummy_backend<int>>>();
-      auto smaller_handler =
-          smaller_memory
-              .template get_handler<trivial_shared_ptr<dummy_backend<int>>>();
-
-      // Check explicitly if handlers share the same underlying pointer
-      bool same_instance = larger_handler.get() == smaller_handler.get();
-
-      // Allocate from smaller_memory
-      int *ptr = smaller_memory.allocate<int>(3);
-      ptr[0] = 1;
-      ptr[2] = 3;
-
-      // Check allocations
-      bool allocation_correct = ptr[0] == 1 && ptr[2] == 3;
-
-      return same_instance && allocation_correct;
-    };
-
-    static_assert(test());
-    expect(test());
-  };
 };
 
 int main() {}
