@@ -141,20 +141,21 @@ suite dynamic_array_suite = [] {
     static_assert(test());
     expect(test());
   };
-
   "dynamic_array_iterator_decrement_post"_test = [] {
     constexpr auto test = [] {
       MAKE_MULTITYPE_MEMORY_FOR_INT;
       ycetl::dynamic_array<int> arr(memory, 2);
       std::construct_at(arr.data(), 10);
       std::construct_at(arr.data() + 1, 20);
-      auto it = arr.end(); // Points past the last element
-      bool val_before =
-          (*(it--) == 20); // it_orig holds original, it is decremented
+
+      auto it = arr.end();
+      --it;
+      bool val_before = (*(it--) == 20);
       bool val_after = (*it == 10);
+
       return val_before && val_after;
     };
-    // static_assert(test());
+    static_assert(test());
     expect(test());
   };
 

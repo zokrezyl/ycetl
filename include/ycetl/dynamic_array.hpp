@@ -48,7 +48,7 @@ public:
 
     constexpr basic_iterator(T *p = nullptr) noexcept : _ptr(p) {}
 
-    operator basic_iterator<true>() const noexcept
+    constexpr operator basic_iterator<true>() const noexcept
       requires(!IsConst)
     {
       return basic_iterator<true>(_ptr);
