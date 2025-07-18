@@ -22,14 +22,10 @@ template <typename CharT, typename CharTraits = std::char_traits<CharT>,
           typename BackendMode = container::by_value>
 class basic_string;
 
-// clang-format on
-
-// clang-format off
 template <typename CharT, 
           typename CharTraits,
           typename Memory,
           typename BackendMode >
-// clang-format on
 class basic_string
     : public container::container<basic_string, CharT, CharTraits, Memory,
                                   BackendMode>

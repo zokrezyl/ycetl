@@ -9,78 +9,80 @@
 
 namespace ycetl {
 
-template <typename T, typename Compare, typename Memory, typename BackendMode>
+template <typename Key, typename Compare, typename Memory, typename BackendMode>
 class set;
-;
 
 template <typename Key, typename Compare = std::less<Key>,
           typename Memory = typename container::container_traits<
-              set, Key, Compare>::default_memory,
+              set, type_set<Key, Compare>>::default_memory,
           typename BackendMode = container::by_value>
 class set;
-/*─────────────────────────────── set ──────────────────────────────────*/
-// clang-format off
-template <typename Key,
-          typename Compare ,
-          typename Memory,
-typename BackendMode>
-// clang-format on
-class set {
-public:
-  using base_type = container::container<set, Key, Memory>;
-  using typename base_type::backend_type;
-  using typename base_type::relevant_of;
-  using typename base_type::storage_unit;
-  using memory_type = Memory;
 
+template <typename Key, typename Compare, typename Memory, typename BackendMode>
+class set
+    : public container::container<set, Key, Compare, Memory, BackendMode> {
+public:
   using key_type = Key;
   using value_type = Key;
-  using size_type = std::size_t;
-  using iterator = storage_unit *;
-  using const_iterator = const storage_unit *;
   using key_compare = Compare;
 
+  using base_type =
+      container::container<set, Key, Compare, Memory, BackendMode>;
+  using traits = typename base_type::traits;
+
+  using storage_unit = typename traits::storage_unit;
+  using backend_type = typename traits::backend_type;
+  using memory_type = Memory;
+
+  using size_type = typename traits::size_type;
+
+  using iterator = storage_unit *;
+  using const_iterator = const storage_unit *;
+
+  using reference = typename traits::reference;
+  using const_reference = typename traits::const_reference;
+  using pointer = typename traits::pointer;
+  using const_pointer = typename traits::const_pointer;
+
 private:
-  owned_pointer<Memory> _memory_ptr;
-  owned_pointer<backend_type> _backend;
+  Memory _memory;
+  backend_type _backend;
 
   key_compare _comp;
 
 public:
   // Internal constructor
   constexpr set(backend_type &backend, Memory &alloc)
-      : _memory_ptr(&alloc), _backend(&backend), _comp() {}
-
-  constexpr Memory &alloc() { return *_memory_ptr; }
-  constexpr const Memory &alloc() const { return *_memory_ptr; }
+      : _memory(&alloc), _backend(&backend), _comp() {}
 
   /* constructors */
-  constexpr set() : _memory_ptr(), _backend(), _comp() {}
-  explicit constexpr set(Memory &a) : _memory_ptr(&a), _backend(), _comp() {}
+  constexpr set() : _memory(), _backend(), _comp() {}
+  explicit constexpr set(Memory &memory)
+      : _memory(memory), _backend(), _comp() {}
 
-  constexpr set(std::initializer_list<Key> il, Memory &a)
-      : _memory_ptr(&a), _backend() {
+  constexpr set(std::initializer_list<Key> il, Memory &memory)
+      : _memory(memory), _backend() {
     for (const auto &e : il)
       insert(e); // use insert to maintain uniqueness & sorting
   }
 
-  constexpr set(std::initializer_list<Key> il) : _memory_ptr(), _backend() {
+  constexpr set(std::initializer_list<Key> il) : _memory(), _backend() {
     for (const auto &e : il)
       insert(e);
   }
 
   constexpr set(const set &o)
-      : _memory_ptr(), _backend(alloc(), *o._backend), _comp(o._comp) {}
+      : _memory(), _backend(_memory, o._backend), _comp(o._comp) {}
 
-  constexpr set(const set &o, Memory &a)
-      : _memory_ptr(&a), _backend(alloc(), *o._backend), _comp(o._comp) {}
+  constexpr set(const set &o, Memory &memory)
+      : _memory(&memory), _backend(_memory, o._backend), _comp(o._comp) {}
 
   constexpr set(set &&o) noexcept
-      : _memory_ptr(std::move(o._memory_ptr)), _backend(std::move(o._backend)),
+      : _memory(std::move(o._memory_ptr)), _backend(std::move(o._backend)),
         _comp(std::move(o._comp)) {}
 
-  constexpr set(set &&o, Memory &a)
-      : _memory_ptr(&a), _backend(), _comp(o._comp) {
+  constexpr set(set &&o, Memory &memory)
+      : _memory(&memory), _backend(), _comp(o._comp) {
     for (auto &e : *o._backend)
       insert(std::move(e));
     o.clear();
@@ -90,26 +92,26 @@ public:
 
   /* capacity ----------------------------------------------------------- */
   constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _backend->size(); }
+  constexpr size_type size() const noexcept { return _backend.size(); }
 
-  constexpr void clear() { _backend->clear(); }
+  constexpr void clear() { _backend.clear(); }
 
   /* modifiers ---------------------------------------------------------- */
   constexpr std::pair<iterator, bool> insert(const Key &val) {
-    auto pos = std::lower_bound(_backend->begin(), _backend->end(), val, _comp);
-    if (pos != _backend->end() && !_comp(val, *pos))
+    auto pos = std::lower_bound(_backend.begin(), _backend.end(), val, _comp);
+    if (pos != _backend.end() && !_comp(val, *pos))
       return {pos, false};
 
-    pos = _backend->insert(alloc(), pos, val);
+    pos = _backend.insert(_memory, pos, val);
     return {pos, true};
   }
 
   constexpr std::pair<iterator, bool> insert(Key &&val) {
-    auto pos = std::lower_bound(_backend->begin(), _backend->end(), val, _comp);
-    if (pos != _backend->end() && !_comp(val, *pos))
+    auto pos = std::lower_bound(_backend.begin(), _backend.end(), val, _comp);
+    if (pos != _backend.end() && !_comp(val, *pos))
       return {pos, false};
 
-    pos = _backend->insert(alloc(), pos, std::move(val));
+    pos = _backend.insert(_memory, pos, std::move(val));
     return {pos, true};
   }
 
@@ -121,15 +123,15 @@ public:
 
   /* element access ----------------------------------------------------- */
   constexpr iterator find(const Key &key) {
-    auto pos = std::lower_bound(_backend->begin(), _backend->end(), key, _comp);
-    if (pos != _backend->end() && !_comp(key, *pos))
+    auto pos = std::lower_bound(_backend.begin(), _backend.end(), key, _comp);
+    if (pos != _backend.end() && !_comp(key, *pos))
       return pos;
     return end();
   }
 
   constexpr const_iterator find(const Key &key) const {
-    auto pos = std::lower_bound(_backend->begin(), _backend->end(), key, _comp);
-    if (pos != _backend->end() && !_comp(key, *pos))
+    auto pos = std::lower_bound(_backend.begin(), _backend.end(), key, _comp);
+    if (pos != _backend.end() && !_comp(key, *pos))
       return pos;
     return end();
   }
@@ -137,11 +139,11 @@ public:
   constexpr bool contains(const Key &key) const { return find(key) != end(); }
 
   /* iterators ---------------------------------------------------------- */
-  constexpr iterator begin() noexcept { return _backend->begin(); }
-  constexpr iterator end() noexcept { return _backend->end(); }
+  constexpr iterator begin() noexcept { return _backend.begin(); }
+  constexpr iterator end() noexcept { return _backend.end(); }
 
-  constexpr const_iterator begin() const noexcept { return _backend->begin(); }
-  constexpr const_iterator end() const noexcept { return _backend->end(); }
+  constexpr const_iterator begin() const noexcept { return _backend.begin(); }
+  constexpr const_iterator end() const noexcept { return _backend.end(); }
 
   constexpr const_iterator cbegin() const noexcept { return begin(); }
   constexpr const_iterator cend() const noexcept { return end(); }
