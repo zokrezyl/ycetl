@@ -45,6 +45,7 @@ function(create_test_executable test_name)
 endfunction()
 
 create_test_executable(test_dynamic_memory)
+create_test_executable(test_static_memory)
 
 create_test_executable(test_memory_downgrade)
 create_test_executable(test_multitype_handler_downgrade)
