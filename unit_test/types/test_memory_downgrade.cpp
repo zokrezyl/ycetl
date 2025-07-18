@@ -40,6 +40,26 @@ suite multitype_memory_downgrade_suite = [] {
     static_assert(test());
     expect(test());
   };
+
+  "constexpr_memory_downgrade_and_allocate"_test = [] {
+    constexpr auto test = [] {
+      multitype_memory<dummy_backend, int, double> original_memory;
+
+      // explicitly downgrade
+      multitype_memory<dummy_backend, int> downgraded_memory(original_memory);
+
+      // Allocate using downgraded memory
+      int *int_ptr = downgraded_memory.allocate<int>(5);
+      int_ptr[0] = 42;
+      int_ptr[4] = 100;
+
+      // Check correctness
+      return int_ptr[0] == 42 && int_ptr[4] == 100;
+    };
+
+    static_assert(test());
+    expect(test());
+  };
 };
 
 int main() {}

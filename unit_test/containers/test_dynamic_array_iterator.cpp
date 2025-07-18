@@ -3,19 +3,17 @@
 #include <iostream> // Needed for iostream include in original compile command, though not directly used in these tests
 #include <numeric>  // For std::iota
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
-#include <ycetl/impl/multitype_memory.hpp>
+#include <ycetl/memory.hpp>
 #include <ycetl/types.hpp>
 
 using namespace boost::ut;
-namespace mem = ycetl::memory;
+using namespace ycetl;
 
 // Helper macro for memory setup.
 // Note: `dynamic_memory` is a runtime allocator, so any test using it
 // cannot be fully evaluated at compile-time by `static_assert`.
 #define MAKE_MULTITYPE_MEMORY_FOR_INT                                          \
-  using memory_t =                                                             \
-      mem::multitype_memory<mem::dynamic_memory, ycetl::type_set<int>>;        \
+  using memory_t = default_memory<int>;                                        \
   memory_t memory;
 
 suite dynamic_array_suite = [] {

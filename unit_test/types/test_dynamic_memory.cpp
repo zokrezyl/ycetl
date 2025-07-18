@@ -4,24 +4,18 @@
 #include <boost/ut.hpp>
 
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
 #include <ycetl/impl/multitype_memory.hpp>
+#include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/types.hpp>
 
 using namespace boost::ut;
-namespace mem = ycetl::memory;
-
-/* shorthand for a simple dynamic_memory */
-template <class T> using dyn_alloc = mem::dynamic_memory<T>;
-/*──────────────────────────────────────────────────────────────────────────────
-  Extra checks for dynamic_memory & multitype_memory (constexpr only)
-──────────────────────────────────────────────────────────────────────────────*/
+using namespace ycetl;
 
 suite memory_suite = [] {
   /* single‑type memory, fundamental ---------------------------------- */
   "dyn_alloc_round_trip_int"_test = [] {
     constexpr auto test = [] {
-      ycetl::memory::dynamic_memory<int> a;
+      typed_dynamic_memory<int> a;
       int *p = a.allocate(4);
       for (int i = 0; i < 4; ++i) {
         std::construct_at(p + i); // default construct
@@ -38,7 +32,7 @@ suite memory_suite = [] {
   };
   "dyn_alloc_round_trip_double"_test = [] {
     constexpr auto test = [] {
-      ycetl::memory::dynamic_memory<double> a;
+      typed_dynamic_memory<double> a;
       double *p = a.allocate(3);
       std::construct_at(p + 0); // default construct
       std::construct_at(p + 1); // default construct
@@ -56,11 +50,17 @@ suite memory_suite = [] {
   /* multitype memory with two POD types ------------------------------ */
   "multitype_alloc_int_double"_test = [] {
     constexpr auto test = [] {
-      using types = ycetl::type_set<int, double>;
-      ycetl::memory::multitype_memory<ycetl::memory::dynamic_memory, types> st;
+      using types = type_set<int, double>;
+      multitype_memory<typed_dynamic_memory, types> st;
 
-      int *pi = st.template allocate<int>(2);
-      double *pd = st.template allocate<double>(1);
+      static_assert(std::is_same_v<decltype(st)::types, type_set<int, double>>);
+      static_assert(std::is_same_v<decltype(st)::handled_types,
+                                   type_set<typed_dynamic_memory<int>,
+                                            typed_dynamic_memory<double>>>);
+
+      int *pi = allocate<int>(st, 2);
+      double *pd = allocate<double>(st, 1);
+
       std::construct_at(pi + 0); // default construct
       std::construct_at(pi + 1); // default construct
       std::construct_at(pd + 0); // default construct
@@ -71,8 +71,36 @@ suite memory_suite = [] {
 
       bool ok = (pi[0] + pi[1] == 18 && pd[0] == 2.0_d);
 
-      st.template deallocate<int>(pi);
-      st.template deallocate<double>(pd);
+      deallocate<int>(st, pi, 2);
+      deallocate<double>(st, pd, 1);
+      return ok;
+    };
+    static_assert(test());
+    expect(test());
+  };
+
+  /* multitype memory with two POD types ------------------------------ */
+  "multitype_alloc_int_double"_test = [] {
+    constexpr auto test = [] {
+      default_memory<int, double> st;
+
+      static_assert(std::is_same_v<decltype(st)::types, type_set<int, double>>);
+
+      int *pi = allocate<int>(st, 2);
+      double *pd = allocate<double>(st, 1);
+
+      std::construct_at(pi + 0); // default construct
+      std::construct_at(pi + 1); // default construct
+      std::construct_at(pd + 0); // default construct
+
+      pi[0] = 7;
+      pi[1] = 11;
+      pd[0] = 2.0;
+
+      bool ok = (pi[0] + pi[1] == 18 && pd[0] == 2.0_d);
+
+      deallocate<int>(st, pi, 2);
+      deallocate<double>(st, pd, 1);
       return ok;
     };
     static_assert(test());

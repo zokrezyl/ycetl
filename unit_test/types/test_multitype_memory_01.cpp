@@ -8,10 +8,27 @@ using namespace ycetl;
 using namespace ycetl::memory;
 
 suite multitype_memory_suite = [] {
-  "multitype_memory_allocate"_test = [] {
+  "multitype_memory_allocate_1"_test = [] {
     constexpr auto test = [] {
       using types = type_set<int, double>;
-      multitype_memory<dynamic_memory, types> mem;
+      multitype_memory<typed_dynamic_memory, types> mem;
+
+      int *int_ptr = mem.allocate<int>(10);
+      // double *double_ptr = mem.allocate<double>(5);
+
+      // bool result = (int_ptr != nullptr) && (double_ptr != nullptr);
+
+      // mem.deallocate(int_ptr);
+      // mem.deallocate(double_ptr);
+
+      return true;
+    };
+    static_assert(test());
+    expect(test());
+  };
+  "multitype_memory_allocate_2"_test = [] {
+    constexpr auto test = [] {
+      multitype_memory<typed_dynamic_memory, int, double, float> mem;
 
       int *int_ptr = mem.allocate<int>(10);
       // double *double_ptr = mem.allocate<double>(5);

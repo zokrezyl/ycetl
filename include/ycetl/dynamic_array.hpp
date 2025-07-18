@@ -26,6 +26,14 @@ template <typename T> class dynamic_array {
   }
 
 public:
+  using value_type = T;
+  using reference = T &;
+  using const_reference = const T &;
+  using pointer = T *;
+  using const_pointer = const T *;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
+
   template <bool IsConst> class basic_iterator {
     friend class dynamic_array;
 
@@ -195,7 +203,8 @@ public:
     return *this;
   }
 
-  dynamic_array(const dynamic_array &) = delete;
+  dynamic_array(const dynamic_array &)
+      : _data(nullptr), _size(0), _capacity(0) {};
   dynamic_array &operator=(const dynamic_array &) = delete;
 
   constexpr ~dynamic_array() { clear(); }
@@ -207,16 +216,15 @@ public:
   constexpr const T &operator[](std::size_t i) const { return _data[i]; }
 
   template <class Memory>
-  constexpr void reserve(Memory &a, std::size_t new_cap) {
+  constexpr void reserve(Memory mem, std::size_t new_cap) {
     if (new_cap <= _capacity)
       return;
-    T *new_buf = ycetl::allocate<T>(a, new_cap);
+    T *new_buf = ycetl::allocate<T>(mem, new_cap);
     for (std::size_t i = 0; i < _size; ++i)
       std::construct_at(new_buf + i, std::move(_data[i]));
     destroy_range(0, _size);
     if (_data) {
-      // Changed to call a.template deallocate<T>(_data)
-      a.template deallocate<T>(_data);
+      ycetl::deallocate<T>(mem, _data, _capacity);
     }
     _data = new_buf;
     _capacity = new_cap;
@@ -253,11 +261,11 @@ public:
   }
 
   template <class Memory, class... Args>
-  constexpr T *emplace_back(Memory &a, Args &&...args) {
+  constexpr reference emplace_back(Memory &a, Args &&...args) {
     if (_size == _capacity)
       reserve(a, _capacity ? _capacity * 2 : 4);
     construct(_size, std::forward<Args>(args)...);
-    return _data + _size++;
+    return _data[_size++];
   }
 
   template <class Memory> constexpr void push_back(Memory &a, const T &v) {
@@ -279,11 +287,10 @@ public:
   }
 
   template <class Memory>
-  constexpr void clear_and_deallocate_buffer(Memory &a) noexcept {
+  constexpr void clear_and_deallocate_buffer(Memory mem) noexcept {
     clear();
     if (_data) {
-      // Changed to call a.template deallocate<T>(_data)
-      a.template deallocate<T>(_data);
+      ycetl::deallocate<T>(mem, _data, _capacity);
       _data = nullptr;
       _capacity = 0;
     }

@@ -3,22 +3,25 @@
 // #include <cstring>
 #include <memory>
 // #include <ycetl/allocator_traits.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
 #include <ycetl/impl/multitype_memory.hpp>
-#include <ycetl/impl/static_memory.hpp>
+#include <ycetl/impl/typed_dynamic_memory.hpp>
+#include <ycetl/impl/typed_static_memory.hpp>
+#include <ycetl/trivial_shared_ptr.hpp>
 #include <ycetl/types.hpp>
 
 namespace ycetl {
 
-template <typename T>
-class allocator_shared_ptr : public trivial_shared_ptr<T> {
-  using element_type = T::element_type;
+template <typename TypedMemoryType>
+class typed_memory_shared_ptr : public trivial_shared_ptr<TypedMemoryType> {
+public:
+  using typed_memory_type = TypedMemoryType;
+  using stored_type = typed_memory_type::stored_type;
 
-  constexpr element_type *allocate(std::size_t n) {
+  constexpr stored_type *allocate(std::size_t n) {
     return this->get()->allocate(n);
   }
 
-  constexpr void deallocate(element_type *p, std::size_t n) {
+  constexpr void deallocate(stored_type *p, std::size_t n) {
     this->get()->deallocate(p, n);
   }
 };
@@ -72,58 +75,24 @@ constexpr T *allocate(MultitypeMemory &alloc, std::size_t n) {
   return alloc.template allocate<T>(n);
 }
 
-template <typename TypeSet>
-using multitype_dynamic_memory =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, TypeSet>;
+template <typename T, typename MultitypeMemory>
+constexpr void deallocate(MultitypeMemory &alloc, T *ptr, std::size_t n) {
+  alloc.template deallocate<T>(ptr, n);
+}
 
 template <typename T>
-using shared_dynamic_memory =
-    ::ycetl::allocator_shared_ptr<::ycetl::memory::dynamic_memory<T>>;
+using typed_shared_dynamic_memory =
+    typed_memory_shared_ptr<typed_dynamic_memory<T>>;
 
-template <typename T>
-using default_memory =
-    ::ycetl::memory::multitype_memory<shared_dynamic_memory, T>;
+template <typename... RawType>
+using dynamic_memory =
+    multitype_memory<typed_shared_dynamic_memory, RawType...>;
 
-template <typename T>
-using static_memory_t =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::static_memory, T>;
+template <typename... RawType>
+using default_memory = dynamic_memory<RawType...>;
 
-namespace memory {
-#if 0
-template <typename InputIt, typename OutputIt, typename Alloc>
-constexpr OutputIt uninitialized_move(InputIt first, InputIt last,
-                                      OutputIt dest, Alloc &alloc) {
-  for (; first != last; ++first, ++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              std::move(*first));
-  return dest;
-}
+template <typename... RawType>
+using static_memory = multitype_memory<typed_static_memory, RawType...>;
 
-template <typename InputIt, typename OutputIt, typename Alloc>
-OutputIt uninitialized_copy(InputIt first, InputIt last, OutputIt dest,
-                            Alloc &alloc) {
-  for (; first != last; ++first, (void)++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              *first);
-  return dest;
-}
-
-template <typename InputIt, typename OutputIt, typename Alloc>
-constexpr OutputIt uninitialized_move_if_noexcept(InputIt first, InputIt last,
-                                                  OutputIt dest, Alloc &alloc) {
-  for (; first != last; ++first, ++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              std::move_if_noexcept(*first));
-  return dest;
-}
-
-template <typename ForwardIt, typename Alloc>
-constexpr void destroy(ForwardIt first, ForwardIt last, Alloc &alloc) {
-  for (; first != last; ++first)
-    ycetl::allocator_traits<Alloc>::destroy(alloc, std::addressof(*first));
-}
-
-#endif
-
-} // namespace memory
+namespace memory {} // namespace memory
 } // namespace ycetl

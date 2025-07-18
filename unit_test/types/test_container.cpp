@@ -20,11 +20,15 @@ class my_basic_string
     : public container::container<my_basic_string, CharT, Traits, Memory,
                                   BackendMode> {};
 
-struct memory_rebindable_type {
-  using memory_type = void; // indicates memory rebindable
+template <typename Memory>
+struct memory_rebindable_type
+    : ycetl::template_info<memory_rebindable_type, Memory> {
+  using memory_type = Memory;
+
   template <typename NewMemory>
-  using rebind = memory_rebindable_type; // mock rebind operation
+  using rebind = memory_rebindable_type<NewMemory>;
 };
+
 suite container_traits_suite = [] {
   "vector_container_traits"_test = [] {
     constexpr auto test = [] {
@@ -62,11 +66,12 @@ suite container_traits_suite = [] {
     constexpr auto test = [] {
       using traits =
           container::container_traits<my_vector,
-                                      type_set<memory_rebindable_type>,
+                                      type_set<memory_rebindable_type<void>>,
                                       default_memory<int>, container::by_value>;
 
-      return std::is_same_v<traits::value_type, memory_rebindable_type> &&
-             ycetl::has_rebindable_memory_v<memory_rebindable_type>;
+      return std::is_same_v<traits::value_type,
+                            memory_rebindable_type<default_memory<int>>> &&
+             ycetl::has_rebindable_memory_v<memory_rebindable_type<void>>;
     };
     static_assert(test());
     expect(test());
@@ -74,3 +79,5 @@ suite container_traits_suite = [] {
 };
 
 } // namespace
+//
+int main() {}

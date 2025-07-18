@@ -33,25 +33,25 @@ file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp")
 add_compile_definitions(FMT_USE_CONSTEXPR)
 add_compile_definitions(FMT_USE_CONSTEXPR_STRING)
 
-set(SKIP_TESTS
-)
 
-foreach(test_file ${TEST_SOURCES})
-  get_filename_component(test_name "${test_file}" NAME_WE)
-
-  list(FIND SKIP_TESTS "${test_name}" skip_index)
-  if(NOT skip_index EQUAL -1)
-    message(STATUS "Skipping test: ${test_name}")
-    continue()
-  endif()
+function(create_test_executable test_name)
+  set(test_file "${test_name}.cpp")
 
   add_executable(${test_name} ${test_file})
-  #target_link_libraries(${test_name} PRIVATE fmt::fmt Boost::ut)
-
   target_link_libraries(${test_name} PRIVATE Boost::ut ytrace::ytrace spdlog::spdlog)
-
   target_compile_options(${test_name} PRIVATE -include iostream)
 
   add_test(NAME ${test_name} COMMAND ${test_name})
-endforeach()
+endfunction()
 
+create_test_executable(test_dynamic_memory)
+
+create_test_executable(test_memory_downgrade)
+create_test_executable(test_multitype_handler_downgrade)
+create_test_executable(test_multitype_memory_01)
+create_test_executable(test_template_rebind)
+create_test_executable(test_trivial_shared_ptr)
+create_test_executable(test_type_set)
+create_test_executable(test_apply_wrapper)
+
+create_test_executable(test_container)

@@ -1,11 +1,11 @@
 #include <boost/ut.hpp>
 #include <iostream>
-#include <ycetl/impl/dynamic_memory.hpp>
 #include <ycetl/impl/multitype_memory.hpp>
+#include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/vector.hpp>
 
 using namespace boost::ut;
-using ycetl::vector;
+using namespace ycetl;
 
 // Simple test structure for the type set
 struct Test {
@@ -18,9 +18,8 @@ struct Test {
 // commas
 #define MAKE_MULTITYPE_MEMORY                                                  \
   using working_type_set =                                                     \
-      ycetl::type_set<int, double, char, Test, std::pair<int, int>>;           \
-  auto memory = ycetl::memory::multitype_memory<ycetl::memory::dynamic_memory, \
-                                                working_type_set>();
+      type_set<int, double, char, Test, std::pair<int, int>>;                  \
+  auto memory = default_memory<working_type_set>();
 
 suite vector_suite = [] {
   // IMPORTANT: Tests involving dynamic memory management (almost all vector
@@ -157,7 +156,7 @@ suite vector_suite = [] {
   };
 
 // This section was commented out in your original code.
-// If your ycetl::vector supports iterator constructors,
+// If your vector supports iterator constructors,
 // ensure they do not imply constexpr operations on dynamic data.
 #if 0
     "forward_iterator_construct"_test = [] {
@@ -210,13 +209,13 @@ suite vector_suite = [] {
   // evaluated directly
   "nested_vectors"_test = [] {
     auto test = [] {
-      // If ycetl::vector<T> without explicit memory argument uses
+      // If vector<T> without explicit memory argument uses
       // default_memory which is a multitype_memory using dynamic_memory, then
       // this is also a runtime operation.
-      using outer_vector_t = ycetl::vector<ycetl::vector<int>>;
+      using outer_vector_t = vector<vector<int>>;
       outer_vector_t outer_vec{}; // Assumes default memory (dynamic)
 
-      using inner_vector_t = ycetl::vector<int>;
+      using inner_vector_t = vector<int>;
       inner_vector_t inner_vec{}; // Assumes default memory (dynamic)
       inner_vec.push_back(42);
       inner_vec.push_back(43);
@@ -233,20 +232,19 @@ suite vector_suite = [] {
   "nested_vectors_with_allocator"_test = [] {
     auto test = [] {
       // relevant_types_t and default_memory are likely based on dynamic_memory
-      using relevant_types =
-          ycetl::relevant_types_t<ycetl::vector<ycetl::vector<int>>>;
+      using relevant_types = relevant_types_t<vector<vector<int>>>;
 
-      using memory_t = ycetl::default_memory<relevant_types>;
+      using memory_t = default_memory<relevant_types>;
 
       memory_t memory; // This object itself likely manages dynamic memory
 
-      using inner_vector_t = ycetl::vector<int, memory_t>;
+      using inner_vector_t = vector<int, memory_t>;
 
       inner_vector_t inner_vec(memory);
       inner_vec.push_back(42);
       inner_vec.push_back(43);
 
-      using outer_vector_t = ycetl::vector<inner_vector_t, memory_t>;
+      using outer_vector_t = vector<inner_vector_t, memory_t>;
       outer_vector_t outer_vec(memory);
       outer_vec.push_back(inner_vec);
 
@@ -259,7 +257,7 @@ suite vector_suite = [] {
 };
 
 // Functions involving dynamic memory CANNOT be constexpr.
-// Your ycetl::vector almost certainly uses dynamic memory through dynamic_array
+// Your vector almost certainly uses dynamic memory through dynamic_array
 // and multitype_memory.
 // Therefore, make_vector and make_vector_simple cannot be constexpr.
 // Removing constexpr from these functions:
@@ -288,19 +286,19 @@ suite default_memory_suite = [] {
 };
 
 // Removed constexpr from make_vector and make_vector_simple
-// These functions perform operations on ycetl::vector, which uses dynamic
+// These functions perform operations on vector, which uses dynamic
 // memory. Hence, they cannot be 'constexpr'.
-ycetl::vector<ycetl::vector<int>> make_vector() {
+vector<vector<int>> make_vector() {
   /* outer and inner vectors both use the library’s default_memory */
-  using vec_t = ycetl::vector<ycetl::vector<int>>;
+  using vec_t = vector<vector<int>>;
 
   using memory_t = typename vec_t::memory_type;
   using payload_types = typename memory_t::type_set;
   // static_assert is for compile-time checks, this check is okay if
   // payload_types and dynamic_array<int> types are indeed compile-time known.
-  static_assert(std::is_same_v<payload_types,
-                               ycetl::type_set<int, ycetl::dynamic_array<int>>>,
-                "memory payload types do not match expected types");
+  static_assert(
+      std::is_same_v<payload_types, type_set<int, dynamic_array<int>>>,
+      "memory payload types do not match expected types");
 
   vec_t vec; // Uses default_memory, which is dynamic
 
@@ -316,9 +314,9 @@ ycetl::vector<ycetl::vector<int>> make_vector() {
               // fine
 }
 
-ycetl::vector<int> make_vector_simple() {
+vector<int> make_vector_simple() {
   /* outer and inner vectors both use the library’s default_memory */
-  ycetl::vector<int> vec; // Uses default_memory, which is dynamic
+  vector<int> vec; // Uses default_memory, which is dynamic
 
   vec.push_back(1); // involves dynamic memory
   vec.push_back(2);

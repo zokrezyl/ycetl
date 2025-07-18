@@ -10,6 +10,7 @@ namespace container {
 
 struct by_value {};     // used to indicate that the container is by value
 struct by_reference {}; // used to indicate that the container is by reference
+//
 template <typename T> struct container_traits_helper {
   using storage_unit = backend_type_of_t<T>;
   using backend_type_raw = dynamic_array<storage_unit>;
@@ -17,19 +18,24 @@ template <typename T> struct container_traits_helper {
   using default_memory = ::ycetl::default_memory<relevant_of>;
 };
 
-template <template <typename...> typename ContainerTemplate, typename T,
-          typename Memory = typename container_traits_helper<T>::default_memory,
+template <template <typename...> typename ContainerTemplate, typename TypeSet,
+          typename Memory =
+              typename container_traits_helper<TypeSet>::default_memory,
           typename BackendMode = by_value>
 struct container_traits;
 
-template <template <typename...> typename ContainerTemplate, typename T,
-          typename Memory, typename BackendMode>
-struct container_traits
-    : public ycetl::template_info<ContainerTemplate, T, Memory, BackendMode> {
+// Specialization clearly isolating Memory and BackendMode from Args...
+template <template <typename...> typename ContainerTemplate,
+          typename... LeadingArgs, typename Memory, typename BackendMode>
+struct container_traits<ContainerTemplate, type_set<LeadingArgs...>, Memory,
+                        BackendMode>
+    : public ycetl::template_info<ContainerTemplate, LeadingArgs..., Memory,
+                                  BackendMode> {
 
   using memory_type = Memory;
 
-  using helper = container_traits_helper<T>;
+  // Helper deduces relevant types from the first type (commonly value_type)
+  using helper = container_traits_helper<first_type_t<LeadingArgs...>>;
 
   using storage_unit = typename helper::storage_unit;
   using backend_type_raw = typename helper::backend_type_raw;
@@ -39,17 +45,14 @@ struct container_traits
   using relevant_of = typename helper::relevant_of;
   using default_memory = typename helper::default_memory;
 
-  // clang-format off
-  using view_type = ContainerTemplate<T, Memory, by_reference>;
+  // The "view_type" uses by_reference mode explicitly.
+  using view_type = ContainerTemplate<LeadingArgs..., Memory, by_reference>;
 
+  // The "value_type" is conditionally rebound to Memory, if possible.
   using value_type = std::conditional_t<
-      ycetl::has_rebindable_memory_v<T>, // Condition: Is T a memory-rebindable
-                                         // type?
-      ycetl::rebind_memory_t<T, Memory>, // True: Rebind T's memory to current
-                                         // container's Memory.
-      T                                  // False: Use T as is.
-      >;
-
+      ycetl::has_rebindable_memory_v<first_type_t<LeadingArgs...>>,
+      ycetl::rebind_memory_t<first_type_t<LeadingArgs...>, Memory>,
+      first_type_t<LeadingArgs...>>;
 
   using reference = value_type &;
   using const_reference = const value_type &;
@@ -59,10 +62,14 @@ struct container_traits
   using difference_type = std::ptrdiff_t;
 };
 
-
 template <template <typename...> typename ContainerTemplate, typename... Args>
 class container {
-  using traits = container_traits<ContainerTemplate, Args...>;
+public:
+  using traits =
+      container_traits<ContainerTemplate,
+                       type_set_init_t<type_set_init_t<type_set<Args...>>>,
+                       type_set_back_t<type_set_init_t<type_set<Args...>>>,
+                       type_set_back_t<type_set<Args...>>>;
 
   using backend_type = typename traits::backend_type;
   using storage_unit = typename traits::storage_unit;
@@ -77,9 +84,7 @@ class container {
   using const_pointer = typename traits::const_pointer;
   using size_type = typename traits::size_type;
   using difference_type = typename traits::difference_type;
-
 };
-
 
 } // namespace container
 } // namespace ycetl

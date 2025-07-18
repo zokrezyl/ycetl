@@ -1,6 +1,6 @@
 #include <boost/ut.hpp>
 #include <ycetl/basic_string.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
+#include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/memory.hpp>
 
 using namespace boost::ut;

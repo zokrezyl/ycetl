@@ -22,40 +22,58 @@ is theoretically possible, casting back from `void*` to a typed pointer
 that work at runtime fail in constexpr contexts.
 */
 
-template <template <typename> class HandlerImpl, typename TypeSet>
-class multitype_handler;
+// the subclass that explicitly takes expanded, flattened type_set
+template <template <typename> class HandlerImpl, typename FlatTypeSet>
+class multitype_handler_impl;
 
 template <template <typename> class HandlerImpl, typename... Ts>
-class multitype_handler<HandlerImpl, type_set<Ts...>> {
+class multitype_handler_impl<HandlerImpl, type_set<Ts...>> {
+public:
+  using types = type_set<Ts...>;
+  using handled_types = type_set<HandlerImpl<Ts>...>;
+
 private:
-  // Tuple of handlers for each type in the type_set
   std::tuple<HandlerImpl<Ts>...> _handlers;
 
 public:
+  constexpr multitype_handler_impl() = default;
+
   template <typename LargerSet>
-  constexpr multitype_handler(
-      const multitype_handler<HandlerImpl, LargerSet> &larger_handler)
+  constexpr multitype_handler_impl(
+      const multitype_handler_impl<HandlerImpl, LargerSet> &larger_handler)
       : _handlers(larger_handler.template get_handler<Ts>()...) {}
 
-  using handled_types = type_set<Ts...>;
-  // Default constructor
-  constexpr multitype_handler() = default;
-
-  // Access handler for a specific type
   template <typename T> constexpr HandlerImpl<T> &get_handler() {
-    static_assert(type_in_typeset<T, type_set<Ts...>>::value,
-                  "multitype_handler error: requested handler type is not "
-                  "present in the type_set");
-
+    static_assert(contains<T, types>::value,
+                  "Requested handler type is not present in the type_set");
     return std::get<HandlerImpl<T>>(_handlers);
   }
 
   template <typename T> constexpr const HandlerImpl<T> &get_handler() const {
-    static_assert(type_in_typeset<T, type_set<Ts...>>::value,
-                  "multitype_handler error: requested handler type is not "
-                  "present in the type_set");
+    static_assert(contains<T, types>::value,
+                  "Requested handler type is not present in the type_set");
     return std::get<HandlerImpl<T>>(_handlers);
   }
+};
+
+// the primary class that calculates types, then explicitly applies and forwards
+template <template <typename> class HandlerImpl, typename... RawTypes>
+class multitype_handler
+    : public multitype_handler_impl<HandlerImpl, flat_type_set_t<RawTypes...>> {
+
+  using Base =
+      multitype_handler_impl<HandlerImpl, flat_type_set_t<RawTypes...>>;
+
+public:
+  using types = typename Base::types;
+  using handled_types = typename Base::handled_types;
+
+  constexpr multitype_handler() = default;
+
+  template <typename... LargerRawTypes>
+  constexpr multitype_handler(
+      const multitype_handler<HandlerImpl, LargerRawTypes...> &larger_handler)
+      : Base(larger_handler) {}
 };
 
 }; // namespace ycetl

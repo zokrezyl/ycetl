@@ -25,8 +25,11 @@ class vector;
 template <class> struct is_vector : std::false_type {};
 template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
-template <typename T, typename Memory, bool Const> class vector_iterator {
+template <typename Traits, typename T, typename Memory, bool Const>
+class vector_iterator {
 public:
+  using view_type = typename Traits::view_type;
+
   using iterator_category = std::random_access_iterator_tag;
   using storage_unit = backend_type_of_t<T>;
   using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
@@ -46,7 +49,7 @@ public:
 
   constexpr reference operator*() const {
     if constexpr (is_vector<T>::value)
-      return value_type(_memory, const_cast<storage_unit &>(*_ptr));
+      return view_type(_memory, const_cast<storage_unit &>(*_ptr));
     else
       return *_ptr;
   }
@@ -130,8 +133,8 @@ public:
   using size_type = typename traits::size_type;
   using difference_type = typename traits::difference_type;
 
-  using iterator = vector_iterator<value_type, memory_type, false>;
-  using const_iterator = vector_iterator<value_type, memory_type, true>;
+  using iterator = vector_iterator<traits, value_type, memory_type, false>;
+  using const_iterator = vector_iterator<traits, value_type, memory_type, true>;
 
 private:
   memory_type _memory;
@@ -240,7 +243,7 @@ public:
     if constexpr (is_vector<T>::value) {
       auto &inner_ref =
           *_backend.emplace_back(_memory, std::forward<Args>(args)...);
-      return T(inner_ref, _memory);
+      return value_type(inner_ref, _memory);
     } else {
       return (*_backend.emplace_back(_memory, std::forward<Args>(args)...));
     }
