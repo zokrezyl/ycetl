@@ -59,5 +59,27 @@ struct container_traits
   using difference_type = std::ptrdiff_t;
 };
 
+
+template <template <typename...> typename ContainerTemplate, typename... Args>
+class container {
+  using traits = container_traits<ContainerTemplate, Args...>;
+
+  using backend_type = typename traits::backend_type;
+  using storage_unit = typename traits::storage_unit;
+  using relevant_of = typename traits::relevant_of;
+  using memory_type = typename traits::memory_type;
+  using value_type = typename traits::value_type;
+  using view_type = typename traits::view_type;
+
+  using reference = typename traits::reference;
+  using const_reference = typename traits::const_reference;
+  using pointer = typename traits::pointer;
+  using const_pointer = typename traits::const_pointer;
+  using size_type = typename traits::size_type;
+  using difference_type = typename traits::difference_type;
+
+};
+
+
 } // namespace container
 } // namespace ycetl

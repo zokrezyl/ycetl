@@ -12,79 +12,46 @@
 
 namespace ycetl {
 
-template <typename T, typename Memory, typename BackendMode>
-class vector; // Forward declaration
+template <typename T, typename Memory, typename BackendMode> class vector;
+;
 
 template <typename T,
-          typename Memory = typename container::container_traits<
-              vector, T>::default_memory, // <- Problem here
+          typename Memory =
+              typename container::container_traits<vector, T>::default_memory,
           typename BackendMode = container::by_value>
 class vector;
 
 /* detect nested vector --------------------------------------------------- */
 template <class> struct is_vector : std::false_type {};
-template <class U, class A, class BM>
-struct is_vector<vector<U, A, BM>> : std::true_type {};
+template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
 
-template <typename T, typename Memory, bool Const, typename BackendMode>
-class vector_iterator {
+template <typename T, typename Memory, bool Const> class vector_iterator {
 public:
   using iterator_category = std::random_access_iterator_tag;
-  using storage_unit =
-      std::conditional_t<is_vector<T>::value, typename T::backend_type, T>;
-  using raw_ptr =
-      std::conditional_t<Const, const storage_unit *, storage_unit *>;
+  using storage_unit = backend_type_of_t<T>;
+  using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
 
   using value_type = T;
   using difference_type = std::ptrdiff_t;
-  // reference type for the iterator should be the actual type it points to.
-  // For nested vectors, this is the view_type. For others, it's T&.
-  using reference = std::conditional_t<
-      is_vector<T>::value,
-      std::conditional_t<
-          Const, const typename vector<T, Memory, BackendMode>::view_type,
-          typename vector<T, Memory, BackendMode>::view_type>,
-      std::conditional_t<Const, const value_type &, value_type &>>;
-  using pointer = std::conditional_t<Const, const value_type *, value_type *>;
+  using pointer = value_type *;
+  using reference = value_type;
 
 private:
-  raw_ptr _ptr = nullptr;
-  [[no_unique_address]] Memory _memory;
+  raw _ptr = nullptr;
+  Memory _memory;
 
 public:
   constexpr vector_iterator() = default;
-  constexpr vector_iterator(raw_ptr p, Memory mem) : _ptr(p), _memory(mem) {}
-
-  template <bool OtherConst, typename = std::enable_if_t<Const && !OtherConst>>
-  constexpr vector_iterator(
-      const vector_iterator<T, Memory, OtherConst, BackendMode> &other)
-      : _ptr(other._ptr), _memory(other._memory) {}
-
-  // Constructor to directly use the backend's iterator.
-  // This is the preferred way to construct vector_iterator from
-  // _backend.begin()/_end().
-  template <bool OtherConst>
-  constexpr vector_iterator(typename ycetl::dynamic_array<storage_unit>::
-                                template basic_iterator<OtherConst>
-                                    backend_it,
-                            Memory mem)
-      : _ptr(&*backend_it), _memory(mem) {}
+  constexpr vector_iterator(raw p, Memory mem) : _ptr(p), _memory(mem) {}
 
   constexpr reference operator*() const {
-    if constexpr (is_vector<T>::value) {
-      // If T is a nested vector, storage_unit is T::backend_type.
-      // *_ptr gives a reference to T::backend_type.
-      // Construct a view_type (which is T) using this reference and the memory.
-      // This will return a temporary view_type object.
-      return typename vector<T, Memory, BackendMode>::view_type(
-          const_cast<storage_unit &>(*_ptr), _memory);
-    } else {
-      // If T is not a nested vector, storage_unit is T.
-      // *_ptr directly gives a reference to T.
+    if constexpr (is_vector<T>::value)
+      return value_type(_memory, const_cast<storage_unit &>(*_ptr));
+    else
       return *_ptr;
-    }
   }
 
+  // Minimal operations for random-access iterator:
   constexpr vector_iterator &operator++() {
     ++_ptr;
     return *this;
@@ -137,18 +104,17 @@ public:
   friend constexpr auto operator<=>(vector_iterator l, vector_iterator r) {
     return l._ptr <=> r._ptr;
   }
-
-  friend class vector<T, Memory, BackendMode>;
 };
 
+/*──────────────────────────── vector ─────────────────────────────────────*/
 // clang-format off
-template <typename T,
-          typename Memory,
-          typename BackendMode>
+template <typename T, 
+  typename Memory,
+  typename BackendMode>
 class vector {
   // clang-format on
 public:
-  using traits = container::container_traits<vector, T, Memory, BackendMode>;
+  using traits = container::container_traits<vector, T, Memory>;
 
   using backend_type = typename traits::backend_type;
   using storage_unit = typename traits::storage_unit;
@@ -164,37 +130,25 @@ public:
   using size_type = typename traits::size_type;
   using difference_type = typename traits::difference_type;
 
-  using iterator = vector_iterator<value_type, memory_type, false, BackendMode>;
-  using const_iterator =
-      vector_iterator<value_type, memory_type, true, BackendMode>;
+  using iterator = vector_iterator<value_type, memory_type, false>;
+  using const_iterator = vector_iterator<value_type, memory_type, true>;
 
 private:
-  [[no_unique_address]] memory_type _memory;
+  memory_type _memory;
   backend_type _backend;
 
 public:
-  // Special constructor mainly used for nested containers (by_reference mode)
-  // The inner container will get a downgraded multitype memory
-  // This constructor is typically used when view_type is created.
-  template <typename OtherMemory,
-            typename Enable = std::enable_if_t<
-                std::is_same_v<BackendMode, container::by_reference>>>
-  constexpr vector(backend_type &backend_ref, OtherMemory other_memory)
-      : _memory(other_memory), _backend(backend_ref) {}
-
-  // Constructor for by_value backend. This handles cases where a vector is
-  // constructed by copying/moving a backend, not just referencing it.
-  template <typename OtherMemory,
-            typename Enable = std::enable_if_t<
-                std::is_same_v<BackendMode, container::by_value>>>
-  constexpr vector(backend_type backend_val, OtherMemory other_memory)
-      : _memory(other_memory), _backend(backend_val) {}
+  // special constructor mainly used for nested containers
+  // the inner container will get a  downgraded multitype memory
+  template <typename OtherMemory>
+  constexpr vector(backend_type backend, OtherMemory other_memory)
+      : _memory(other_memory), _backend(backend) {}
 
   template <class, class, class> friend class vector;
 
-  /* constructors */
-  constexpr vector() : _memory(), _backend(_memory) {}
-  explicit constexpr vector(memory_type mem) : _memory(mem), _backend(mem) {}
+  /* constructors (unchanged bodies, but _backend calls stay correct) */
+  constexpr vector() : _memory(), _backend() {}
+  explicit constexpr vector(memory_type mem) : _memory(mem), _backend() {}
 
   constexpr vector(size_type n, const T &v)
       : _memory(), _backend(_memory, n, v) {}
@@ -223,21 +177,16 @@ public:
       : _memory(o._memory), _backend(_memory, o._backend) {}
 
   constexpr vector(const vector &o, memory_type mem)
-      : _memory(mem), _backend(_memory, o._backend) {}
+      : _memory(mem), _backend(_memory, *o._backend) {}
 
   constexpr vector(vector &&o) noexcept
       : _memory(std::move(o._memory)), _backend(std::move(o._backend)) {}
 
-  constexpr vector(vector &&o, memory_type mem) : _memory(mem), _backend(mem) {
-    if (this->_memory == o._memory) {
-      _backend = std::move(o._backend);
-    } else {
-      reserve(o.size());
-      for (auto &e : o)
-        push_back(
-            std::move(e)); // Use push_back to handle nested move semantics
-      o.clear();
-    }
+  constexpr vector(vector &&o, memory_type mem) : _memory(mem), _backend() {
+    reserve(o.size());
+    for (auto &e : *o._backend)
+      _backend.push_back(_memory, std::move(e));
+    o.clear();
   }
 
   constexpr ~vector() = default;
@@ -254,8 +203,6 @@ public:
   /* element access ----------------------------------------------------- */
   constexpr auto operator[](size_type i) {
     if constexpr (is_vector<T>::value)
-      // _backend[i] returns backend_type (e.g., dynamic_array<int>&)
-      // view_type should be able to construct from this reference.
       return view_type(_backend[i], _memory);
     else
       return _backend[i];
@@ -271,32 +218,30 @@ public:
   /* modifiers ---------------------------------------------------------- */
   constexpr void push_back(const T &v) {
     if constexpr (is_vector<T>::value)
-      // For nested vectors, pass the inner vector's backend for construction
-      _backend.emplace_back(_memory, v._backend);
+      // the first _memory is for the vector itself, the second for the
+      // back-end
+      _backend.emplace_back(_memory, _memory, *v._backend); // copy back‑end
     else
       _backend.push_back(_memory, v);
   }
   constexpr void push_back(T &&v) {
     if constexpr (is_vector<T>::value)
-      // For nested vectors, move the inner vector's backend
-      _backend.emplace_back(_memory, std::move(v._backend));
+      _backend.emplace_back(_memory, std::move(*v._backend)); // move back‑end
     else
       _backend.push_back(_memory, std::move(v));
   }
 
+  /*
+  template <class... Args> constexpr T &emplace_back(Args &&...args) {
+    return *_backend.emplace_back(_memory, std::forward<Args>(args)...);
+  }
+  */
   template <class... Args> constexpr auto emplace_back(Args &&...args) {
     if constexpr (is_vector<T>::value) {
-      // For nested vectors, forward args to construct T::backend_type directly.
-      // _backend.emplace_back should construct the inner backend in-place
-      // and return a reference to it.
-      auto &emplaced_inner_backend_ref =
-          _backend.emplace_back(_memory, std::forward<Args>(args)...);
-      // Then return a view_type constructed from this emplaced backend
-      // reference.
-      return T(emplaced_inner_backend_ref, _memory);
+      auto &inner_ref =
+          *_backend.emplace_back(_memory, std::forward<Args>(args)...);
+      return T(inner_ref, _memory);
     } else {
-      // For non-nested types, _backend.emplace_back returns a pointer to T,
-      // dereference it.
       return (*_backend.emplace_back(_memory, std::forward<Args>(args)...));
     }
   }
@@ -304,18 +249,15 @@ public:
   constexpr iterator insert(iterator pos, const T &val) {
     size_type idx = pos - begin();
     if constexpr (is_vector<T>::value)
-      _backend.insert(_memory, _backend.begin() + idx, val._backend);
+      _backend.insert(_memory, _backend.begin() + idx, *val._backend);
     else
       _backend.insert(_memory, _backend.begin() + idx, val);
-    // Use the vector_iterator constructor that takes the backend_it
     return iterator(_backend.begin() + idx, _memory);
   }
 
   constexpr void pop_back() { _backend.pop_back(); }
 
   /* iterators ---------------------------------------------------------- */
-  // Use the vector_iterator constructor that takes
-  // dynamic_array::basic_iterator
   constexpr iterator begin() noexcept { return {_backend.begin(), _memory}; }
   constexpr iterator end() noexcept { return {_backend.end(), _memory}; }
   constexpr const_iterator begin() const noexcept {
