@@ -10,32 +10,31 @@
 
 namespace ycetl {
 
-template <typename CharT, typename CharTraits, typename Memory,
-          typename BackendMode>
+template <typename CharT, typename CharTraits, typename BackendMode,
+          typename Memory>
 class basic_string;
 
 // clang-format off
 template <typename CharT, typename CharTraits = std::char_traits<CharT>,
+          typename BackendMode = container::by_value,
           typename Memory = typename container::container_traits<
                                 basic_string, 
-                                type_set<CharT, CharTraits>>::default_memory,
-          typename BackendMode = container::by_value>
+                                type_set<CharT, CharTraits>>::default_memory>
 class basic_string;
 
 template <typename CharT, 
           typename CharTraits,
-          typename Memory,
-          typename BackendMode >
+          typename BackendMode ,
+          typename Memory>
 class basic_string
-    : public container::container<basic_string, CharT, CharTraits, Memory,
-                                  BackendMode>
+    : public container::container<basic_string, CharT, CharTraits, BackendMode, Memory>
 
 {
 public:
   using value_type = CharT;
   using traits_type = CharTraits;
   using base_type = container::container<basic_string, CharT, CharTraits,
-                                         Memory, BackendMode>;
+                                         BackendMode, Memory>;
   using traits = typename base_type::traits;
 
   using storage_unit = typename traits::storage_unit;
@@ -72,8 +71,8 @@ public:
   constexpr basic_string(std::initializer_list<CharT> il)
       : _memory(), _backend(_memory, il) {}
 
-  constexpr basic_string(std::initializer_list<CharT> il, Memory &a)
-      : _memory(&a), _backend(_memory, il) {}
+  constexpr basic_string(std::initializer_list<CharT> il, Memory &memory)
+      : _memory(memory), _backend(_memory, il) {}
 
   constexpr basic_string(const basic_string &o)
       : _memory(), _backend(_memory, o._backend) {}
@@ -137,6 +136,17 @@ public:
       push_back(s[i]);
     return *this;
   }
+
+constexpr basic_string& operator=(const basic_string& other) {
+  if (this != &other) {
+    _backend.clear(_memory);
+    _backend.resize(other._backend.size(), _memory);
+    for (size_type i = 0; i < other._backend.size(); ++i) {
+      _backend[i] = other._backend[i];
+    }
+  }
+  return *this;
+}
 
   constexpr const_pointer data() const noexcept { return _backend.data(); }
 

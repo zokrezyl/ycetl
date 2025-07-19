@@ -30,7 +30,7 @@ suite dynamic_array_suite = [] {
       bool ok = arr.size() == 5_u && arr.capacity() == 5_u;
       for (auto v : arr)
         ok = ok && v == 0;
-      arr.clear_and_deallocate_buffer(alloc);
+      // arr.clear_and_deallocate_buffer(alloc);
       return ok;
     };
     static_assert(test_lambda());

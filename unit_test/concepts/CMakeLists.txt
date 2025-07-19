@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # disables -std=gnu++20, enforces -std=c++20
 
 #add_compile_options(-stdlib=libc++ -fconstexpr-steps=1000000)
-add_compile_options(-fconstexpr-steps=100000000)
+#add_compile_options(-fconstexpr-steps=100000000)
 #add_compile_options(-fconstexpr-loop-limit=1000000000 -fconstexpr-ops-limit=1000000000)
 
 include(../../cmake/CPM.cmake)

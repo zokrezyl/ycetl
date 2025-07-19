@@ -5,7 +5,6 @@
 
 using namespace boost::ut;
 using namespace ycetl;
-using namespace ycetl::memory;
 
 // Minimal dummy backend to test allocations
 template <typename T> struct dummy_backend {

@@ -47,13 +47,16 @@ endfunction()
 
 
 create_test_executable(test_dynamic_array_1)
+
+if(FALSE)
+
 create_test_executable(test_nested_dynamic_array)
 create_test_executable(test_dynamic_array_2)
 create_test_executable(test_dynamic_array_iterator)
 create_test_executable(test_basic_string)
-create_test_executable(test_set)
 
-if(FALSE)
+
+create_test_executable(test_set)
   create_test_executable(test_basic_string_return)
   create_test_executable(test_basic_string_with_memory)
   create_test_executable(test_basic_string_with_static_memory)

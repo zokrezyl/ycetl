@@ -10,43 +10,61 @@
 
 namespace ycetl {
 
-template <typename T> class dynamic_array {
-  T *_data = nullptr;
-  std::size_t _size = 0;
-  std::size_t _capacity = 0;
+template <typename T> auto none() noexcept { return T{}; }
 
+template <typename T, typename TypedMemory = typed_dynamic_memory<T>>
+class dynamic_array {
+
+public:
+  using typed_memory = TypedMemory;
+  using pointer = typename typed_memory::pointer;
+  using size_type = typename typed_memory::size_type;
+  using difference_type = typename typed_memory::difference_type;
+
+private:
+  pointer _data;
+  size_type _size = 0;
+  size_type _capacity = 0;
+
+#if 0
   template <class... Args>
-  constexpr void construct(std::size_t i, Args &&...args) {
+  constexpr void construct(size_type i, Args &&...args) {
     std::construct_at(_data + i, std::forward<Args>(args)...);
   }
 
-  constexpr void destroy_range(std::size_t first, std::size_t last) noexcept {
-    for (std::size_t i = first; i < last; ++i)
-      std::destroy_at(_data + i);
+#endif
+  constexpr void destroy_range(size_type first, size_type last) noexcept {
+    for (size_type i = first; i < last; ++i)
+      destroy_at(_data + i);
   }
 
 public:
   using value_type = T;
   using reference = T &;
   using const_reference = const T &;
-  using pointer = T *;
-  using const_pointer = const T *;
-  using size_type = std::size_t;
-  using difference_type = std::ptrdiff_t;
+  using const_pointer = const pointer;
 
   template <bool IsConst> class basic_iterator {
+
     friend class dynamic_array;
 
-    T *_ptr;
+  public:
+    using typed_memory = TypedMemory;
+    using pointer = typename typed_memory::pointer;
+    using const_pointer = typename typed_memory::const_pointer;
+    using size_type = typename typed_memory::size_type;
+    using difference_type = typename typed_memory::difference_type;
 
-    using pointer_type = std::conditional_t<IsConst, const T *, T *>;
-    using reference_type = std::conditional_t<IsConst, const T &, T &>;
+  private:
+    pointer _ptr;
+
+    using pointer_type = std::conditional_t<IsConst, const_pointer, pointer>;
+    using reference_type =
+        std::conditional_t<IsConst, const_reference, reference>;
 
   public:
     using iterator_category = std::random_access_iterator_tag;
     using value_type = T;
-    using difference_type = std::ptrdiff_t;
-    using pointer = pointer_type;
     using reference = reference_type;
 
     friend constexpr basic_iterator operator+(difference_type n,
@@ -54,7 +72,9 @@ public:
       return it + n;
     }
 
-    constexpr basic_iterator(T *p = nullptr) noexcept : _ptr(p) {}
+    constexpr basic_iterator() = delete;
+
+    constexpr basic_iterator(pointer_type ptr) noexcept : _ptr(ptr) {}
 
     constexpr operator basic_iterator<true>() const noexcept
       requires(!IsConst)
@@ -62,8 +82,10 @@ public:
       return basic_iterator<true>(_ptr);
     }
 
-    constexpr reference operator*() const noexcept { return *_ptr; }
-    constexpr pointer operator->() const noexcept { return _ptr; }
+    constexpr const_reference operator*() const noexcept { return *_ptr; }
+    constexpr reference operator*() noexcept { return *_ptr; }
+
+    constexpr pointer operator->() const noexcept { return *_ptr; }
 
     constexpr basic_iterator &operator++() noexcept {
       ++_ptr;
@@ -133,9 +155,95 @@ public:
   using iterator = basic_iterator<false>;
   using const_iterator = basic_iterator<true>;
 
+  // we provide three categories of constructors:
+  // 1. without memory, using default typed_memory
+  // 2. with typed_memory, which is a memory handler for a specific type
+  // 3. with multitype_memory, which can handle multiple types
+
+  // allocators without input memory
+  constexpr dynamic_array() noexcept : _data(typed_memory().none()) {}
+
+  constexpr dynamic_array(size_type n) noexcept
+      : _data(typed_memory().allocate(n)), _size(n), _capacity(n) {
+    construct_n(_data, n);
+  }
+
+  constexpr dynamic_array(size_type n, const T &v) noexcept
+      : _data(typed_memory().allocate(n)), _size(n), _capacity(n) {
+    construct_n(_data, n, v);
+  }
+
+  constexpr dynamic_array(const dynamic_array &other)
+      : _data(other._data.memory().allocate(other._capacity)),
+        _size(other._size), _capacity(other._capacity) {
+    copy_construct_n(other._data[0], _size, _data[0]);
+  };
+
+  // allocators with typed_memory
+
+  constexpr dynamic_array(typed_memory &memory) noexcept
+      : _data(memory.none()) {}
+
+  constexpr dynamic_array(typed_memory &memory, size_type n) noexcept
+      : _data(memory.allocate(n)), _size(n), _capacity(n) {
+    construct_n(_data, n);
+  }
+
+  constexpr dynamic_array(typed_memory &memory, size_type n,
+                          const_reference v) noexcept
+      : _data(memory.allocate(n)), _size(n), _capacity(n) {
+    construct_n(_data, n, v);
+  }
+
+  constexpr dynamic_array(typed_memory &mem, const dynamic_array &other)
+      : _data(mem.allocate(other._capacity)), _size(other._size),
+        _capacity(other._capacity) {
+    copy_construct_n(other._data[0], _size, _data[0]);
+  };
+
+  // allocators with multitype_memory
+  template <class MultitypeMemory>
+  constexpr dynamic_array(MultitypeMemory &memory, size_type n)
+      : _data(::ycetl::allocate<T>(memory, n)), _size(n), _capacity(n) {
+    construct_n(_data, n);
+  }
+
+  template <class MultitypeMemory>
+  constexpr dynamic_array(MultitypeMemory &memory, size_type n,
+                          const_reference v)
+      : _data(::ycetl::allocate<T>(memory, n)), _size(n), _capacity(n) {
+    construct_n(_data, n);
+  }
+
+#if 0
+  template <class Memory, class It>
+  constexpr dynamic_array(Memory &a, It first, size_type n)
+    requires std::is_base_of_v<
+                 std::input_iterator_tag,
+                 typename std::iterator_traits<It>::iterator_category>
+      : _data(ycetl::allocate<value_type>(a, n)), _size(n), _capacity(n) {
+    for (size_type i = 0; i < n; ++i)
+      construct(i, *(first + i));
+  }
+#endif
+
+  template <class Memory>
+  constexpr dynamic_array(Memory &a, std::initializer_list<T> il)
+      : dynamic_array(a, il.begin(), il.size()) {}
+
+#if 0
+  constexpr dynamic_array(dynamic_array &&other) noexcept
+      : _data(std::exchange(other._data, nullptr)),
+        _size(std::exchange(other._size, 0)),
+        _capacity(std::exchange(other._capacity, 0)) {}
+#endif
+
+  dynamic_array &operator=(const dynamic_array &) = delete;
+
   constexpr iterator begin() noexcept { return iterator(_data); }
   constexpr iterator end() noexcept { return iterator(_data + _size); }
-  constexpr T *data() noexcept { return _data; }
+
+  constexpr pointer data() noexcept { return _data; }
 
   constexpr const_iterator begin() const noexcept {
     return const_iterator(_data);
@@ -151,48 +259,6 @@ public:
     return const_iterator(_data + _size);
   }
 
-  // Re-enabled the default constructor
-  constexpr dynamic_array() noexcept {}
-
-  template <class Memory> constexpr explicit dynamic_array(Memory &) noexcept {}
-
-  template <class Memory>
-  constexpr dynamic_array(Memory &a, std::size_t n)
-      : _data(ycetl::allocate<T>(a, n)), _size(n), _capacity(n) {
-    for (std::size_t i = 0; i < n; ++i)
-      construct(i);
-  }
-
-  template <class Memory>
-  constexpr dynamic_array(Memory &a, std::size_t n, const T &v)
-      : _data(ycetl::allocate<T>(a, n)), _size(n), _capacity(n) {
-    for (std::size_t i = 0; i < n; ++i)
-      construct(i, v);
-  }
-
-  template <class Memory, class It>
-  constexpr dynamic_array(Memory &a, It first, std::size_t n)
-    requires std::is_base_of_v<
-                 std::input_iterator_tag,
-                 typename std::iterator_traits<It>::iterator_category>
-      : _data(ycetl::allocate<T>(a, n)), _size(n), _capacity(n) {
-    for (std::size_t i = 0; i < n; ++i)
-      construct(i, *(first + i));
-  }
-
-  template <class Memory>
-  constexpr dynamic_array(Memory &a, const dynamic_array &other)
-      : dynamic_array(a, other.begin(), other.size()) {}
-
-  template <class Memory>
-  constexpr dynamic_array(Memory &a, std::initializer_list<T> il)
-      : dynamic_array(a, il.begin(), il.size()) {}
-
-  constexpr dynamic_array(dynamic_array &&other) noexcept
-      : _data(std::exchange(other._data, nullptr)),
-        _size(std::exchange(other._size, 0)),
-        _capacity(std::exchange(other._capacity, 0)) {}
-
   constexpr dynamic_array &operator=(dynamic_array &&other) noexcept {
     if (this != &other) {
       clear();
@@ -203,78 +269,68 @@ public:
     return *this;
   }
 
-  dynamic_array(const dynamic_array &)
-      : _data(nullptr), _size(0), _capacity(0) {};
-  dynamic_array &operator=(const dynamic_array &) = delete;
-
   constexpr ~dynamic_array() { clear(); }
 
-  constexpr std::size_t size() const { return _size; }
-  constexpr std::size_t capacity() const { return _capacity; }
+  constexpr size_type size() const { return _size; }
+  constexpr size_type capacity() const { return _capacity; }
 
-  constexpr T &operator[](std::size_t i) { return _data[i]; }
-  constexpr const T &operator[](std::size_t i) const { return _data[i]; }
+  constexpr T &operator[](size_type i) { return _data[i]; }
+  constexpr const T &operator[](size_type i) const { return _data[i]; }
 
-  template <class Memory>
-  constexpr void reserve(Memory mem, std::size_t new_cap) {
+  constexpr void reserve(size_type new_cap) {
     if (new_cap <= _capacity)
       return;
-    T *new_buf = ycetl::allocate<T>(mem, new_cap);
-    for (std::size_t i = 0; i < _size; ++i)
+    pointer new_buf = _data.memory().allocate(new_cap);
+    for (size_type i = 0; i < _size; ++i)
       std::construct_at(new_buf + i, std::move(_data[i]));
     destroy_range(0, _size);
+#if 0
     if (_data) {
-      ycetl::deallocate<T>(mem, _data, _capacity);
+      _data.memory().deallocate(_data, _capacity);
     }
+#endif
     _data = new_buf;
     _capacity = new_cap;
   }
 
-  template <class Memory>
-  constexpr void resize(Memory &a, std::size_t new_size) {
+  constexpr void resize(size_type new_size) {
     if (new_size < _size) {
       destroy_range(new_size, _size);
     } else if (new_size > _size) {
       if (new_size > _capacity) {
-        reserve(a, new_size);
+        reserve(new_size);
       }
-      for (std::size_t i = _size; i < new_size; ++i) {
+      for (size_type i = _size; i < new_size; ++i) {
         construct(i);
       }
     }
     _size = new_size;
   }
 
-  template <class Memory>
-  constexpr void resize(Memory &a, std::size_t new_size, const T &v) {
+  constexpr void resize(size_type new_size, const T &v) {
     if (new_size < _size) {
       destroy_range(new_size, _size);
     } else if (new_size > _size) {
       if (new_size > _capacity) {
-        reserve(a, new_size);
+        reserve(new_size);
       }
-      for (std::size_t i = _size; i < new_size; ++i) {
+      for (size_type i = _size; i < new_size; ++i) {
         construct(i, v);
       }
     }
     _size = new_size;
   }
 
-  template <class Memory, class... Args>
-  constexpr reference emplace_back(Memory &a, Args &&...args) {
+  template <class... Args> constexpr reference emplace_back(Args &&...args) {
     if (_size == _capacity)
-      reserve(a, _capacity ? _capacity * 2 : 4);
+      reserve(_capacity ? _capacity * 2 : 4);
     construct(_size, std::forward<Args>(args)...);
     return _data[_size++];
   }
 
-  template <class Memory> constexpr void push_back(Memory &a, const T &v) {
-    emplace_back(a, v);
-  }
+  constexpr void push_back(const T &v) { emplace_back(v); }
 
-  template <class Memory> constexpr void push_back(Memory &a, T &&v) {
-    emplace_back(a, std::move(v));
-  }
+  constexpr void push_back(T &&v) { emplace_back(std::move(v)); }
 
   constexpr void pop_back() {
     --_size;
@@ -286,22 +342,22 @@ public:
     _size = 0;
   }
 
-  template <class Memory>
-  constexpr void clear_and_deallocate_buffer(Memory mem) noexcept {
+  constexpr void clear_and_deallocate_buffer() noexcept {
+#if 0
     clear();
     if (_data) {
       ycetl::deallocate<T>(mem, _data, _capacity);
       _data = nullptr;
       _capacity = 0;
     }
+#endif
   }
 
-  template <class Memory>
-  constexpr iterator insert(Memory &a, iterator pos, const T &v) {
-    std::size_t idx = pos - begin();
+  constexpr iterator insert(iterator pos, const T &v) {
+    size_type idx = pos - begin();
     if (_size == _capacity)
-      reserve(a, _capacity ? _capacity * 2 : 4);
-    for (std::size_t i = _size; i > idx; --i) {
+      reserve(_capacity ? _capacity * 2 : 4);
+    for (size_type i = _size; i > idx; --i) {
       if (i < _size) {
         _data[i] = std::move(_data[i - 1]);
       } else {
@@ -313,12 +369,11 @@ public:
     return iterator(_data + idx);
   }
 
-  template <class Memory>
-  constexpr iterator insert(Memory &a, iterator pos, T &&v) {
-    std::size_t idx = pos - begin();
+  constexpr iterator insert(iterator pos, T &&v) {
+    size_type idx = pos - begin();
     if (_size == _capacity)
-      reserve(a, _capacity ? _capacity * 2 : 4);
-    for (std::size_t i = _size; i > idx; --i) {
+      reserve(_capacity ? _capacity * 2 : 4);
+    for (size_type i = _size; i > idx; --i) {
       if (i < _size) {
         _data[i] = std::move(_data[i - 1]);
       } else {
@@ -330,25 +385,24 @@ public:
     return iterator(_data + idx);
   }
 
-  template <class Memory> constexpr T *erase(Memory &a, T *pos) {
-    std::size_t idx = pos - _data;
+  constexpr pointer erase(pointer pos) {
+    size_type idx = pos - _data;
     std::destroy_at(_data + idx);
-    for (std::size_t i = idx; i < _size - 1; ++i)
+    for (size_type i = idx; i < _size - 1; ++i)
       std::construct_at(_data + i, std::move(_data[i + 1]));
     --_size;
     return _data + idx;
   }
 
-  template <class Memory>
-  constexpr iterator erase(Memory &a, T *first, T *last) {
-    std::size_t first_idx = first - _data;
-    std::size_t last_idx = last - _data;
-    std::size_t num_to_erase = last_idx - first_idx;
+  constexpr iterator erase(pointer first, pointer last) {
+    size_type first_idx = first - _data;
+    size_type last_idx = last - _data;
+    size_type num_to_erase = last_idx - first_idx;
 
-    for (std::size_t i = first_idx; i < last_idx; ++i)
+    for (size_type i = first_idx; i < last_idx; ++i)
       std::destroy_at(_data + i);
 
-    for (std::size_t i = first_idx; i < _size - num_to_erase; ++i)
+    for (size_type i = first_idx; i < _size - num_to_erase; ++i)
       std::construct_at(_data + i, std::move(_data[i + num_to_erase]));
 
     _size -= num_to_erase;

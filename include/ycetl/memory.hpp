@@ -11,82 +11,90 @@
 
 namespace ycetl {
 
-template <typename TypedMemoryType>
-class typed_memory_shared_ptr : public trivial_shared_ptr<TypedMemoryType> {
-public:
-  using typed_memory_type = TypedMemoryType;
-  using stored_type = typed_memory_type::stored_type;
-
-  constexpr stored_type *allocate(std::size_t n) {
-    return this->get()->allocate(n);
-  }
-
-  constexpr void deallocate(stored_type *p, std::size_t n) {
-    this->get()->deallocate(p, n);
-  }
-};
-
-template <typename T> class owned_pointer {
-  T *_ptr = nullptr;
-  bool _owned = true;
-
-public:
-  constexpr owned_pointer() : _ptr(new T()) {}
-  template <typename... Args>
-  constexpr owned_pointer(Args &&...args)
-      : _ptr(new T(std::forward<Args>(args)...)) {}
-  constexpr owned_pointer(T *p) : _ptr(p), _owned(false) {}
-  owned_pointer(const owned_pointer &) = delete;
-  owned_pointer &operator=(const owned_pointer &) = delete;
-
-  constexpr owned_pointer(owned_pointer &&other) noexcept
-      : _ptr(other._ptr), _owned(other._owned) {
-    other._ptr = nullptr;
-    other._owned = false;
-  }
-
-  constexpr owned_pointer &operator=(owned_pointer &&other) noexcept {
-    if (this != &other) {
-      if (_owned && _ptr)
-        delete _ptr;
-      _ptr = other._ptr;
-      _owned = other._owned;
-      other._ptr = nullptr;
-      other._owned = false;
-    }
-    return *this;
-  }
-
-  constexpr ~owned_pointer() {
-    if (_owned && _ptr)
-      delete _ptr; // ← honour non‑owned case
-  }
-  constexpr T *get() { return _ptr; }
-  constexpr const T *get() const { return _ptr; }
-  constexpr T &operator*() { return *_ptr; }
-  constexpr const T &operator*() const { return *_ptr; }
-
-  constexpr T *operator->() { return _ptr; }
-  constexpr const T *operator->() const { return _ptr; }
-};
-
 template <typename T, typename MultitypeMemory>
-constexpr T *allocate(MultitypeMemory &alloc, std::size_t n) {
+constexpr auto allocate(MultitypeMemory &alloc, std::size_t n) {
   return alloc.template allocate<T>(n);
 }
 
 template <typename T, typename MultitypeMemory>
-constexpr void deallocate(MultitypeMemory &alloc, T *ptr, std::size_t n) {
+constexpr void deallocate(MultitypeMemory &alloc,
+                          pointer_type_t<T, MultitypeMemory> ptr,
+                          std::size_t n) {
   alloc.template deallocate<T>(ptr, n);
 }
 
-template <typename T>
-using typed_shared_dynamic_memory =
-    typed_memory_shared_ptr<typed_dynamic_memory<T>>;
+template <typename PointerType, typename... Args>
+constexpr PointerType construct_at(PointerType ptr, Args &&...args) {
+  return std::construct_at(*ptr, std::forward<Args>(args)...);
+}
+
+template <typename PointerType> constexpr void destroy_at(PointerType ptr) {
+  std::destroy_at(ptr.get());
+}
+
+template <typename Backend, typename... Args>
+constexpr static_synthetic_pointer<Backend>
+construct_at(static_synthetic_pointer<Backend> ptr, Args &&...args) {
+  std::construct_at(ptr.get(), std::forward<Args>(args)...);
+  return ptr;
+}
+
+template <typename Backend, typename... Args>
+constexpr dynamic_synthetic_pointer<Backend>
+construct_at(dynamic_synthetic_pointer<Backend> ptr, Args &&...args) {
+  std::construct_at(ptr.get(), std::forward<Args>(args)...);
+  return ptr;
+}
+
+// helper function to allocate and construct an object of type array of T
+template <typename T, typename MultitypeMemory, typename... Args>
+constexpr auto allocate_and_construct_n(MultitypeMemory &alloc, std::size_t n,
+                                        Args &&...args) {
+  auto ptr = allocate<T>(alloc, n);
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(ptr + i, std::forward<Args>(args)...);
+  }
+  return ptr;
+}
+
+template <typename PointerType, typename... Args>
+constexpr auto construct_n(PointerType ptr, std::size_t n, Args &&...args) {
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(ptr + i, std::forward<Args>(args)...);
+  }
+  return ptr;
+}
+
+template <typename SrcPointerType, typename DestPointerType>
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(dest + i, src + i);
+  }
+  return dest;
+}
+
+template <typename T, typename MultitypeMemory>
+constexpr void destroy_n(MultitypeMemory &alloc, T *ptr, std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
+    std::destroy_at(ptr + i);
+  }
+  deallocate<T>(alloc, ptr, n);
+}
+
+template <typename T, typename MultitypeHandler>
+constexpr auto get(MultitypeHandler &multitype_handler) {
+  return multitype_handler.template get_handler<T>();
+}
+
+template <typename T, typename MultitypeHandler>
+constexpr auto get(const MultitypeHandler &multitype_handler) -> const
+    decltype(multitype_handler.template get_handler<T>()) {
+  return multitype_handler.template get_handler<T>();
+}
 
 template <typename... RawType>
-using dynamic_memory =
-    multitype_memory<typed_shared_dynamic_memory, RawType...>;
+using dynamic_memory = multitype_memory<typed_dynamic_memory, RawType...>;
 
 template <typename... RawType>
 using default_memory = dynamic_memory<RawType...>;
@@ -94,5 +102,8 @@ using default_memory = dynamic_memory<RawType...>;
 template <typename... RawType>
 using static_memory = multitype_memory<typed_static_memory, RawType...>;
 
-namespace memory {} // namespace memory
+template <typename T_Rebindable>
+using static_t = rebind_memory_t<T_Rebindable,
+                                 static_memory<relevant_types_t<T_Rebindable>>>;
+
 } // namespace ycetl

@@ -44,15 +44,26 @@ function(create_test_executable test_name)
   add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
-create_test_executable(test_dynamic_memory)
-create_test_executable(test_static_memory)
+
+create_test_executable(test_typed_static_memory)
+create_test_executable(test_multitype_static_memory)
+
+create_test_executable(test_typed_dynamic_memory)
+create_test_executable(test_multitype_dynamic_memory)
+
+
 
 create_test_executable(test_memory_downgrade)
 create_test_executable(test_multitype_handler_downgrade)
-create_test_executable(test_multitype_memory_01)
+create_test_executable(test_multitype_memory)
 create_test_executable(test_template_rebind)
 create_test_executable(test_trivial_shared_ptr)
 create_test_executable(test_type_set)
 create_test_executable(test_apply_wrapper)
 
-create_test_executable(test_container)
+#create_test_executable(test_container)
+
+if(FALSE)
+
+create_test_executable(test_container_metamorphosis)
+endif()

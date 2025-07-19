@@ -12,13 +12,12 @@
 
 namespace ycetl {
 
-template <typename T, typename Memory, typename BackendMode> class vector;
+template <typename T, typename BackendMode, typename Memory> class vector;
 ;
 
-template <typename T,
+template <typename T, typename BackendMode = container::by_value,
           typename Memory =
-              typename container::container_traits<vector, T>::default_memory,
-          typename BackendMode = container::by_value>
+              typename container::container_traits<vector, T>::default_memory>
 class vector;
 
 /* detect nested vector --------------------------------------------------- */
@@ -112,8 +111,8 @@ public:
 /*──────────────────────────── vector ─────────────────────────────────────*/
 // clang-format off
 template <typename T, 
-  typename Memory,
-  typename BackendMode>
+  typename BackendMode,
+  typename Memory>
 class vector {
   // clang-format on
 public:

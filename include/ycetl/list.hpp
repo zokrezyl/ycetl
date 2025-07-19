@@ -28,8 +28,8 @@ public:
   using const_iterator = const storage_unit *;
 
 private:
-  owned_pointer<Allocator> _alloc_ptr;
-  owned_pointer<storage_type> _storage;
+  Memory _memory;
+  storage_type _storage;
 
 public:
   // Internal constructor

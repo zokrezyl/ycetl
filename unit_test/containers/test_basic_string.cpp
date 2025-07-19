@@ -2,9 +2,10 @@
 #include <ycetl/basic_string.hpp>
 #include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/memory.hpp>
+#include <ycetl/string.hpp>
 
 using namespace boost::ut;
-using ycetl::basic_string;
+using namespace ycetl;
 
 suite basic_string_suite_no_explicit_memory = [] {
   "empty_basic_string_default_memory"_test = [] {
@@ -74,6 +75,34 @@ suite basic_string_suite_no_explicit_memory = [] {
     };
     static_assert(test());
     expect(test());
+  };
+  "return_to_runtime"_test = [] {
+    constexpr auto test = [] {
+      using string_t = static_t<basic_string<char>>;
+      // string_t s({'a', 'b', 'c'});
+      string_t s;
+      s.reserve(3);
+      // return s.size() == 3_u && s[1] == 'b';
+      //
+      static_assert(std::is_same_v<typename string_t::value_type, char>);
+      static_assert(has_rebindable_memory_v<string_t>);
+
+      static_assert(std::is_same_v<typename string_t::value_type, char>);
+      static_assert(has_rebindable_memory_v<string_t>);
+      static_assert(
+          std::is_same_v<typename string_t::memory_type,
+                         static_memory<relevant_types_t<basic_string<char>>>>);
+      static_assert(std::is_same_v<typename string_t::traits_type,
+                                   std::char_traits<char>>);
+      //
+      //
+      return s;
+      // return true; // Placeholder to avoid unused variable warning
+    };
+    constexpr auto s = test();
+    // static_assert(s.size() == 3);
+    //  static_assert(test());
+    //  expect(test());
   };
 };
 

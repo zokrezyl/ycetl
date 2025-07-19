@@ -34,7 +34,7 @@ suite container_traits_suite = [] {
     constexpr auto test = [] {
       using vec_traits =
           container::container_traits<my_vector, type_set<int>,
-                                      default_memory<int>, container::by_value>;
+                                      container::by_value, default_memory<int>>;
 
       return std::is_same_v<vec_traits::value_type, int> &&
              std::is_same_v<vec_traits::backend_type_raw, dynamic_array<int>> &&
