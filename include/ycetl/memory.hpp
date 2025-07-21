@@ -3,10 +3,10 @@
 // #include <cstring>
 #include <memory>
 // #include <ycetl/allocator_traits.hpp>
-#include <ycetl/impl/multitype_memory.hpp>
-#include <ycetl/impl/typed_dynamic_memory.hpp>
-#include <ycetl/impl/typed_static_memory.hpp>
+#include <ycetl/multitype_memory.hpp>
 #include <ycetl/trivial_shared_ptr.hpp>
+#include <ycetl/typed_dynamic_memory.hpp>
+#include <ycetl/typed_static_memory.hpp>
 #include <ycetl/types.hpp>
 
 namespace ycetl {
@@ -25,7 +25,7 @@ constexpr void deallocate(MultitypeMemory &alloc,
 
 template <typename PointerType, typename... Args>
 constexpr PointerType construct_at(PointerType ptr, Args &&...args) {
-  return std::construct_at(*ptr, std::forward<Args>(args)...);
+  return std::construct_at(ptr.get(), std::forward<Args>(args)...);
 }
 
 template <typename PointerType> constexpr void destroy_at(PointerType ptr) {
@@ -65,17 +65,40 @@ constexpr auto construct_n(PointerType ptr, std::size_t n, Args &&...args) {
   return ptr;
 }
 
+// Version for synthetic pointer (has .get())
+template <typename SrcPointerType, typename DestPointerType>
+  requires requires { typename SrcPointerType::value_type; }
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i)
+    construct_at(dest + i, *(src + i).get());
+  return dest;
+}
+
+// Version for raw pointer
+template <typename SrcPointerType, typename DestPointerType>
+  requires(!requires { typename SrcPointerType::value_type; })
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i)
+    construct_at(dest + i, *(src + i));
+  return dest;
+}
+
+#if 0
 template <typename SrcPointerType, typename DestPointerType>
 constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
                                 DestPointerType dest) {
   for (std::size_t i = 0; i < n; ++i) {
-    construct_at(dest + i, src + i);
+    construct_at(dest + i, *(src + i).get());
   }
   return dest;
 }
+#endif
 
 template <typename T, typename MultitypeMemory>
-constexpr void destroy_n(MultitypeMemory &alloc, T *ptr, std::size_t n) {
+constexpr void destroy_and_deallocate_n(MultitypeMemory &alloc, T *ptr,
+                                        std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     std::destroy_at(ptr + i);
   }

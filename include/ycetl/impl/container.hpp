@@ -51,7 +51,7 @@ struct container_traits<ContainerTemplate, type_set<LeadingArgs...>,
       ycetl::rebind_memory_t<first_type_t<LeadingArgs...>, memory_type>,
       first_type_t<LeadingArgs...>>;
 
-  using pointer = pointer_type_t<storage_unit, Memory>;
+  using pointer = pointer_type_t<storage_unit, memory_type>;
   using backend_type_raw = dynamic_array<storage_unit, pointer>;
 
   using backend_type = std::conditional_t<std::is_same_v<BackendMode, by_value>,

@@ -7,6 +7,7 @@
 #include <utility>
 
 #include <ycetl/memory.hpp>
+#include <ycetl/multitype_memory.hpp>
 
 namespace ycetl {
 
@@ -20,6 +21,8 @@ public:
   using pointer = typename typed_memory::pointer;
   using size_type = typename typed_memory::size_type;
   using difference_type = typename typed_memory::difference_type;
+  using raw_pointer = typename typed_memory::raw_pointer;
+  using const_raw_pointer = typename typed_memory::const_raw_pointer;
 
 private:
   pointer _data;
@@ -51,21 +54,23 @@ public:
   public:
     using typed_memory = TypedMemory;
     using pointer = typename typed_memory::pointer;
+    using raw_pointer = typename typed_memory::raw_pointer;
+    using const_raw_pointer = typename typed_memory::const_raw_pointer;
     using const_pointer = typename typed_memory::const_pointer;
     using size_type = typename typed_memory::size_type;
     using difference_type = typename typed_memory::difference_type;
-
-  private:
-    pointer _ptr;
 
     using pointer_type = std::conditional_t<IsConst, const_pointer, pointer>;
     using reference_type =
         std::conditional_t<IsConst, const_reference, reference>;
 
+  private:
+    pointer_type _ptr;
+
   public:
     using iterator_category = std::random_access_iterator_tag;
     using value_type = T;
-    using reference = reference_type;
+    // using reference = reference_type;
 
     friend constexpr basic_iterator operator+(difference_type n,
                                               basic_iterator it) noexcept {
@@ -82,8 +87,17 @@ public:
       return basic_iterator<true>(_ptr);
     }
 
-    constexpr const_reference operator*() const noexcept { return *_ptr; }
-    constexpr reference operator*() noexcept { return *_ptr; }
+    constexpr reference_type operator*() noexcept
+      requires(!IsConst)
+    {
+      return *_ptr;
+    }
+
+    constexpr reference_type operator*() const noexcept
+      requires(IsConst)
+    {
+      return *_ptr;
+    }
 
     constexpr pointer operator->() const noexcept { return *_ptr; }
 
@@ -134,6 +148,14 @@ public:
     constexpr bool operator!=(const basic_iterator &other) const noexcept {
       return _ptr != other._ptr;
     }
+
+    constexpr bool operator==(raw_pointer raw) const noexcept {
+      return _ptr.get() == raw;
+    }
+    constexpr bool operator!=(raw_pointer raw) const noexcept {
+      return _ptr.get() != raw;
+    }
+
     constexpr bool operator<(const basic_iterator &other) const noexcept {
       return _ptr < other._ptr;
     }
@@ -147,7 +169,15 @@ public:
       return _ptr >= other._ptr;
     }
 
-    constexpr reference operator[](difference_type n) const noexcept {
+    constexpr reference_type operator[](difference_type n) noexcept
+      requires(!IsConst)
+    {
+      return _ptr[n];
+    }
+
+    constexpr reference_type operator[](difference_type n) const noexcept
+      requires(IsConst)
+    {
       return _ptr[n];
     }
   };
@@ -168,7 +198,7 @@ public:
     construct_n(_data, n);
   }
 
-  constexpr dynamic_array(size_type n, const T &v) noexcept
+  constexpr dynamic_array(size_type n, const_reference v) noexcept
       : _data(typed_memory().allocate(n)), _size(n), _capacity(n) {
     construct_n(_data, n, v);
   }
@@ -176,7 +206,7 @@ public:
   constexpr dynamic_array(const dynamic_array &other)
       : _data(other._data.memory().allocate(other._capacity)),
         _size(other._size), _capacity(other._capacity) {
-    copy_construct_n(other._data[0], _size, _data[0]);
+    copy_construct_n(other._data, _size, _data);
   };
 
   // allocators with typed_memory
@@ -198,45 +228,55 @@ public:
   constexpr dynamic_array(typed_memory &mem, const dynamic_array &other)
       : _data(mem.allocate(other._capacity)), _size(other._size),
         _capacity(other._capacity) {
-    copy_construct_n(other._data[0], _size, _data[0]);
+    copy_construct_n(other._data, _size, _data);
   };
 
   // allocators with multitype_memory
   template <class MultitypeMemory>
+  constexpr dynamic_array(MultitypeMemory &memory)
+      : _data(for_type<T>(memory).none()), _size(0), _capacity(0) {}
+
+  template <class MultitypeMemory>
   constexpr dynamic_array(MultitypeMemory &memory, size_type n)
-      : _data(::ycetl::allocate<T>(memory, n)), _size(n), _capacity(n) {
+      : _data(allocate<T>(memory, n)), _size(n), _capacity(n) {
     construct_n(_data, n);
   }
 
   template <class MultitypeMemory>
   constexpr dynamic_array(MultitypeMemory &memory, size_type n,
                           const_reference v)
-      : _data(::ycetl::allocate<T>(memory, n)), _size(n), _capacity(n) {
-    construct_n(_data, n);
+      : _data(allocate<T>(memory, n)), _size(n), _capacity(n) {
+    construct_n(_data, n, v);
   }
 
-#if 0
+  template <class MultitypeMemory>
+  constexpr dynamic_array(MultitypeMemory &memory, dynamic_array &other)
+      : _data(allocate<T>(memory, other._capacity)), _size(other._size),
+        _capacity(other._capacity) {
+    copy_construct_n(other._data, _size, _data);
+  }
+
+  constexpr dynamic_array(std::initializer_list<T> il)
+      : dynamic_array(typed_memory(), il.begin(), il.size()) {}
+
+  constexpr dynamic_array(typed_memory &a, std::initializer_list<T> il)
+      : dynamic_array(a, il.begin(), il.size()) {}
+
   template <class Memory, class It>
   constexpr dynamic_array(Memory &a, It first, size_type n)
-    requires std::is_base_of_v<
-                 std::input_iterator_tag,
-                 typename std::iterator_traits<It>::iterator_category>
-      : _data(ycetl::allocate<value_type>(a, n)), _size(n), _capacity(n) {
-    for (size_type i = 0; i < n; ++i)
-      construct(i, *(first + i));
+    requires std::input_iterator<It>
+      : _data(allocate<value_type>(a, n)), _size(n), _capacity(n) {
+    copy_construct_n(first, _size, _data);
   }
-#endif
 
   template <class Memory>
   constexpr dynamic_array(Memory &a, std::initializer_list<T> il)
       : dynamic_array(a, il.begin(), il.size()) {}
 
-#if 0
   constexpr dynamic_array(dynamic_array &&other) noexcept
-      : _data(std::exchange(other._data, nullptr)),
+      : _data(std::exchange(other._data, other._data.memory().none())),
         _size(std::exchange(other._size, 0)),
         _capacity(std::exchange(other._capacity, 0)) {}
-#endif
 
   dynamic_array &operator=(const dynamic_array &) = delete;
 
@@ -282,7 +322,7 @@ public:
       return;
     pointer new_buf = _data.memory().allocate(new_cap);
     for (size_type i = 0; i < _size; ++i)
-      std::construct_at(new_buf + i, std::move(_data[i]));
+      construct_at(new_buf + i, std::move(_data[i]));
     destroy_range(0, _size);
 #if 0
     if (_data) {
@@ -294,29 +334,25 @@ public:
   }
 
   constexpr void resize(size_type new_size) {
-    if (new_size < _size) {
+    if (new_size > _capacity) {
+      reserve(new_size);
+    }
+    if (new_size > _size) {
+      construct_n(_data + _size, new_size - _size);
+    } else if (new_size < _size) {
       destroy_range(new_size, _size);
-    } else if (new_size > _size) {
-      if (new_size > _capacity) {
-        reserve(new_size);
-      }
-      for (size_type i = _size; i < new_size; ++i) {
-        construct(i);
-      }
     }
     _size = new_size;
   }
 
   constexpr void resize(size_type new_size, const T &v) {
-    if (new_size < _size) {
+    if (new_size > _capacity) {
+      reserve(new_size);
+    }
+    if (new_size > _size) {
+      construct_n(_data + _size, new_size - _size, v);
+    } else if (new_size < _size) {
       destroy_range(new_size, _size);
-    } else if (new_size > _size) {
-      if (new_size > _capacity) {
-        reserve(new_size);
-      }
-      for (size_type i = _size; i < new_size; ++i) {
-        construct(i, v);
-      }
     }
     _size = new_size;
   }
@@ -324,7 +360,7 @@ public:
   template <class... Args> constexpr reference emplace_back(Args &&...args) {
     if (_size == _capacity)
       reserve(_capacity ? _capacity * 2 : 4);
-    construct(_size, std::forward<Args>(args)...);
+    construct_at(_data + _size, std::forward<Args>(args)...);
     return _data[_size++];
   }
 
@@ -346,7 +382,7 @@ public:
 #if 0
     clear();
     if (_data) {
-      ycetl::deallocate<T>(mem, _data, _capacity);
+      deallocate<T>(mem, _data, _capacity);
       _data = nullptr;
       _capacity = 0;
     }
@@ -361,10 +397,10 @@ public:
       if (i < _size) {
         _data[i] = std::move(_data[i - 1]);
       } else {
-        std::construct_at(_data + i, std::move(_data[i - 1]));
+        construct_at(_data + i, std::move(_data[i - 1]));
       }
     }
-    std::construct_at(_data + idx, v);
+    construct_at(_data + idx, v);
     ++_size;
     return iterator(_data + idx);
   }
@@ -377,10 +413,10 @@ public:
       if (i < _size) {
         _data[i] = std::move(_data[i - 1]);
       } else {
-        std::construct_at(_data + i, std::move(_data[i - 1]));
+        construct_at(_data + i, std::move(_data[i - 1]));
       }
     }
-    std::construct_at(_data + idx, std::move(v));
+    construct_at(_data + idx, std::move(v));
     ++_size;
     return iterator(_data + idx);
   }

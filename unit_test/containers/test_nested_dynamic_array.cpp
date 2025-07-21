@@ -38,7 +38,7 @@ suite dynamic_array_suite = [] {
       for (auto v : arr)
         ok = ok && v.size() == 0;
 #endif
-      arr.clear_and_deallocate_buffer(alloc);
+      // arr.clear_and_deallocate_buffer(alloc);
       return ok;
     };
     static_assert(test_lambda());
