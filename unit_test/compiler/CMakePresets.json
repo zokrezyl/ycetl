@@ -1,0 +1,64 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 19,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "gcc",
+      "description": "Default build using Ninja generator",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/gcc",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_FLAGS": "-fconstexpr-loop-limit=1000000000 -fconstexpr-ops-limit=1000000000",
+        "CMAKE_CXX_EXTENSIONS": "OFF"
+      }
+    },
+    {
+      "name": "clang",
+      "description": "Default build using Ninja generator",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/clang",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_CXX_FLAGS": "-fconstexpr-steps=100000000",
+        "CMAKE_CXX_EXTENSIONS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "gcc",
+      "configurePreset": "gcc"
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "gcc",
+      "configurePreset": "gcc",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
