@@ -31,6 +31,12 @@ struct container_traits<ContainerTemplate, type_set<LeadingArgs...>,
                         BackendMode, Memory>
     : public ycetl::template_info<ContainerTemplate, LeadingArgs...,
                                   BackendMode, Memory> {
+  static_assert(!std::is_same_v<Memory, by_value> &&
+                    !std::is_same_v<Memory, by_reference>,
+                "container_traits: Memory and BackendMode template args appear "
+                "swapped -- expected order is "
+                "<ContainerTemplate, type_set<...>, BackendMode, Memory>.");
+
   using memory_type = Memory;
 
   // Helper deduces relevant types from the first type (commonly value_type)
@@ -52,7 +58,8 @@ struct container_traits<ContainerTemplate, type_set<LeadingArgs...>,
       first_type_t<LeadingArgs...>>;
 
   using pointer = pointer_type_t<storage_unit, memory_type>;
-  using backend_type_raw = dynamic_array<storage_unit, pointer>;
+  using backend_type_raw =
+      dynamic_array<storage_unit, typed_memory_t<storage_unit, memory_type>>;
 
   using backend_type = std::conditional_t<std::is_same_v<BackendMode, by_value>,
                                           backend_type_raw, backend_type_raw &>;

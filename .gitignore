@@ -1,7 +1,6 @@
 errors.err
 CMakeFiles/
 CMakeCache.txt
-Makefile
 .cache/
 _deps/
 .clangd
@@ -12,3 +11,5 @@ compile_commands.json
 errors.err
 CTestTestfile.cmake
 build/
+build-linux/
+tmp/

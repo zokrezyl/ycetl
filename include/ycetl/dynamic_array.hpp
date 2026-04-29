@@ -301,15 +301,15 @@ public:
 
   constexpr dynamic_array &operator=(dynamic_array &&other) noexcept {
     if (this != &other) {
-      clear();
-      _data = std::exchange(other._data, nullptr);
+      clear_and_deallocate_buffer();
+      _data = std::exchange(other._data, other._data.memory().none());
       _size = std::exchange(other._size, 0);
       _capacity = std::exchange(other._capacity, 0);
     }
     return *this;
   }
 
-  constexpr ~dynamic_array() { clear(); }
+  constexpr ~dynamic_array() { clear_and_deallocate_buffer(); }
 
   constexpr size_type size() const { return _size; }
   constexpr size_type capacity() const { return _capacity; }
@@ -324,11 +324,9 @@ public:
     for (size_type i = 0; i < _size; ++i)
       construct_at(new_buf + i, std::move(_data[i]));
     destroy_range(0, _size);
-#if 0
-    if (_data) {
+    if (_capacity > 0) {
       _data.memory().deallocate(_data, _capacity);
     }
-#endif
     _data = new_buf;
     _capacity = new_cap;
   }
@@ -373,20 +371,26 @@ public:
     std::destroy_at(_data + _size);
   }
 
+  // Same semantics as std::vector::clear(): destroy all elements and reset
+  // size to 0, but KEEP the buffer and capacity so subsequent push_back /
+  // emplace_back can reuse them without reallocating.
   constexpr void clear() noexcept {
     destroy_range(0, _size);
     _size = 0;
   }
 
+  // Equivalent of clear() followed by shrink_to_fit() to zero capacity:
+  // destroys elements, deallocates the buffer, nulls _data, zeros size and
+  // capacity. Use this when you really want the storage gone.
   constexpr void clear_and_deallocate_buffer() noexcept {
-#if 0
-    clear();
-    if (_data) {
-      deallocate<T>(mem, _data, _capacity);
-      _data = nullptr;
-      _capacity = 0;
+    destroy_range(0, _size);
+    if (_capacity > 0) {
+      auto &mem = _data.memory();
+      mem.deallocate(_data, _capacity);
+      _data = mem.none();
     }
-#endif
+    _size = 0;
+    _capacity = 0;
   }
 
   constexpr iterator insert(iterator pos, const T &v) {

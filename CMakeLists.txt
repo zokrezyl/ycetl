@@ -22,3 +22,14 @@ target_link_libraries(yconstexpr INTERFACE ytrace ytrace::ytrace field_reflectio
 
 add_library(yconstexpr::yconstexpr  ALIAS yconstexpr)
 
+option(YCETL_BUILD_TESTS "Build unit tests" ON)
+if(YCETL_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(unit_test)
+endif()
+
+option(YCETL_BUILD_EXAMPLES "Build examples" ON)
+if(YCETL_BUILD_EXAMPLES)
+  add_subdirectory(examples/yce)
+endif()
+

@@ -24,27 +24,34 @@ public:
   using const_pointer = const pointer;
 
 private:
-  typed_memory_reference _typed_memory;
+  // Pointer (not reference) so the class stays copy-/move-assignable, which
+  // is required by dynamic_array's reserve()/clear()/operator=.
+  typed_memory *_typed_memory = nullptr;
   std::size_t _offset = 0; // offset 0 has nullptr semantics
 public:
+  constexpr static_synthetic_pointer() noexcept = default;
+
   constexpr static_synthetic_pointer(typed_memory &mem, size_type offset)
-      : _typed_memory(mem), _offset(offset) {}
+      : _typed_memory(&mem), _offset(offset) {}
+
+  constexpr void reset() noexcept { _offset = 0; }
 
   constexpr raw_reference operator[](size_type index) {
-    return _typed_memory[_offset + index];
+    return (*_typed_memory)[_offset + index];
   }
   constexpr const_raw_reference operator[](std::size_t index) const {
-    return _typed_memory[_offset + index];
+    return (*_typed_memory)[_offset + index];
   }
-  constexpr auto operator+(size_type offset) const {
-    return static_synthetic_pointer{_typed_memory, _offset + offset};
+  constexpr raw_pointer get() {
+    return _typed_memory ? &(*_typed_memory)[_offset] : nullptr;
   }
-  constexpr raw_pointer get() { return &_typed_memory[_offset]; }
-  constexpr const_raw_pointer get() const { return &_typed_memory[_offset]; }
+  constexpr const_raw_pointer get() const {
+    return _typed_memory ? &(*_typed_memory)[_offset] : nullptr;
+  }
 
-  constexpr raw_reference operator*() { return _typed_memory[_offset]; }
+  constexpr raw_reference operator*() { return (*_typed_memory)[_offset]; }
   constexpr const_raw_reference operator*() const {
-    return _typed_memory[_offset];
+    return (*_typed_memory)[_offset];
   }
 
   constexpr raw_pointer operator->() { return get(); }
@@ -65,7 +72,7 @@ public:
   }
 
   constexpr pointer operator+(difference_type offset) const {
-    return pointer{_typed_memory, _offset + offset};
+    return pointer{*_typed_memory, _offset + offset};
   }
 
   constexpr difference_type operator-(const pointer &other) const {
@@ -84,7 +91,7 @@ public:
     return temp;
   }
 
-  typed_memory_reference memory() { return _typed_memory; }
+  constexpr typed_memory_reference memory() { return *_typed_memory; }
 };
 
 template <typename T> class static_memory_backend {

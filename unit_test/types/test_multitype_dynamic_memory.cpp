@@ -4,8 +4,8 @@
 #include <boost/ut.hpp>
 
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/impl/multitype_memory.hpp>
-#include <ycetl/impl/typed_dynamic_memory.hpp>
+#include <ycetl/multitype_memory.hpp>
+#include <ycetl/typed_dynamic_memory.hpp>
 #include <ycetl/types.hpp>
 
 using namespace boost::ut;

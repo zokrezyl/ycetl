@@ -4,7 +4,7 @@
 #include <boost/ut.hpp>
 
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/impl/typed_static_memory.hpp>
+#include <ycetl/typed_static_memory.hpp>
 #include <ycetl/types.hpp>
 
 using namespace boost::ut;

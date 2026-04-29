@@ -1,6 +1,6 @@
 #include <boost/ut.hpp>
 #include <tuple>
-#include <ycetl/impl/multitype_handler.hpp>
+#include <ycetl/multitype_handler.hpp>
 #include <ycetl/type_system.hpp>
 
 using namespace boost::ut;

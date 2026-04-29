@@ -46,8 +46,8 @@ suite multitype_memory_suite = [] {
     constexpr auto test = [] {
       static_memory<int, double, float> mem;
 
-      auto int_ptr = construct_n<int>(mem, 10, 0);
-      auto double_ptr = construct_n<double>(mem, 5, 0);
+      auto int_ptr = allocate_and_construct_n<int>(mem, 10, 0);
+      auto double_ptr = allocate_and_construct_n<double>(mem, 5, 0);
 
       // bool result = (int_ptr != nullptr) && (double_ptr != nullptr);
 

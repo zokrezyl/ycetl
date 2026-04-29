@@ -79,7 +79,7 @@ suite container_traits_suite = [] {
     constexpr auto test = [] {
       using string_traits = container::container_traits<
           my_basic_string, type_set<char, std::char_traits<char>>,
-          default_memory<char>, container::by_reference>;
+          container::by_reference, default_memory<char>>;
 
       return std::is_same_v<string_traits::value_type, char> &&
              std::is_same_v<string_traits::backend_type_raw,
@@ -97,7 +97,7 @@ suite container_traits_suite = [] {
       using traits =
           container::container_traits<my_vector,
                                       type_set<memory_rebindable_type<void>>,
-                                      default_memory<int>, container::by_value>;
+                                      container::by_value, default_memory<int>>;
 
       return std::is_same_v<traits::value_type,
                             memory_rebindable_type<default_memory<int>>> &&

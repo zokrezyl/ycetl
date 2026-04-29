@@ -100,13 +100,23 @@ suite dynamic_array_suite_1 = [] {
     static_assert(test_lambda());
     expect(test_lambda());
   };
+  "clear_keeps_capacity"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 3});
+      arr.clear();
+      // std::vector::clear() semantics: size resets, capacity is preserved.
+      return arr.size() == 0_u && arr.capacity() == 3_u;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
   "clear_and_deallocate_buffer_1"_test = [] {
     auto test_lambda = [] {
       default_memory<int> alloc{};
       dynamic_array<int> arr(alloc, {1, 2, 3});
-      // arr.clear_and_deallocate_buffer(alloc);
-      arr.clear();
-      return arr.capacity() == 3_u;
+      arr.clear_and_deallocate_buffer();
+      return arr.capacity() == 0_u;
     };
     static_assert(test_lambda());
     expect(test_lambda());
@@ -115,12 +125,10 @@ suite dynamic_array_suite_1 = [] {
     auto test_lambda = [] {
       default_memory<int> alloc{};
       dynamic_array<int> arr(alloc, {1, 2, 3});
-      // arr.clear_and_deallocate_buffer(alloc);
-      arr.clear();
-      // TODO clear should set the pointers to nullptr
+      arr.clear_and_deallocate_buffer();
       return arr.begin() == nullptr;
     };
-    // static_assert(test_lambda());
+    static_assert(test_lambda());
     expect(test_lambda());
   };
 };
