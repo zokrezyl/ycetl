@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+watch_files() {
+  #ls -1 && ls -1 -d ../include/ycetl/*
+  ls -1 
+}
+
+run_build_and_test_target() {
+  set -e
+  cmake --build --preset clang 
+  ctest --preset clang 
+}
+
+
+if [[ "$1" == "--run" ]]; then
+  shift
+  run_build_and_test_target 
+else
+  TARGET="$1"
+  watch_files | entr "$0" --run 
+fi
+
