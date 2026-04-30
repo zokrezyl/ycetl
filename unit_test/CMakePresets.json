@@ -10,7 +10,7 @@
       "name": "default",
       "description": "Default build using Ninja generator",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/default",
+      "binaryDir": "${sourceDir}/../build-linux/unit_test/default",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",

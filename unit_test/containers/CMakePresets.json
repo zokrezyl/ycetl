@@ -10,7 +10,7 @@
       "name": "gcc",
       "description": "Default build using Ninja generator",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/gcc",
+      "binaryDir": "${sourceDir}/../../build-linux/unit_test/containers/gcc",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
@@ -24,7 +24,7 @@
       "name": "clang",
       "description": "Default build using Ninja generator",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/clang",
+      "binaryDir": "${sourceDir}/../../build-linux/unit_test/containers/clang",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
