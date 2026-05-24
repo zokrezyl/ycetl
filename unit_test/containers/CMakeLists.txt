@@ -52,6 +52,13 @@ create_test_executable(test_nested_dynamic_array)
 create_test_executable(test_dynamic_array_static_memory)
 create_test_executable(test_container)
 
+# New STL-shaped containers built on dynamic_array.
+create_test_executable(test_span)
+create_test_executable(test_stack)
+create_test_executable(test_priority_queue)
+create_test_executable(test_unordered_set)
+create_test_executable(test_map)
+
 if(FALSE)
 create_test_executable(test_basic_string)
 

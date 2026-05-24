@@ -60,7 +60,12 @@ public:
     using size_type = typename typed_memory::size_type;
     using difference_type = typename typed_memory::difference_type;
 
-    using pointer_type = std::conditional_t<IsConst, const_pointer, pointer>;
+    // The iterator's *position* is mutable even when iterating const data —
+    // `const_iterator` only constrains what you can do *through* it, not
+    // whether the iterator itself can advance. Making _ptr `const pointer`
+    // (the previous shape) blocked operator++ because the synthetic
+    // pointer's mutating ops aren't const-qualified.
+    using pointer_type = pointer;
     using reference_type =
         std::conditional_t<IsConst, const_reference, reference>;
 
@@ -99,7 +104,19 @@ public:
       return *_ptr;
     }
 
-    constexpr pointer operator->() const noexcept { return *_ptr; }
+    // Both static_synthetic_pointer and dynamic_synthetic_pointer expose
+    // .get() returning raw_pointer (T*) — that's what operator-> must
+    // hand back so `it->member` resolves as plain struct member access.
+    constexpr auto operator->() const noexcept
+      requires(!IsConst)
+    {
+      return _ptr.get();
+    }
+    constexpr auto operator->() const noexcept
+      requires(IsConst)
+    {
+      return static_cast<const_raw_pointer>(_ptr.get());
+    }
 
     constexpr basic_iterator &operator++() noexcept {
       ++_ptr;
@@ -368,7 +385,9 @@ public:
 
   constexpr void pop_back() {
     --_size;
-    std::destroy_at(_data + _size);
+    // ycetl::destroy_at, not std::destroy_at — synthetic pointers
+    // (typed_dynamic_memory's pointer type) aren't raw T*.
+    destroy_at(_data + _size);
   }
 
   // Same semantics as std::vector::clear(): destroy all elements and reset
@@ -427,9 +446,9 @@ public:
 
   constexpr pointer erase(pointer pos) {
     size_type idx = pos - _data;
-    std::destroy_at(_data + idx);
+    destroy_at(_data + idx);
     for (size_type i = idx; i < _size - 1; ++i)
-      std::construct_at(_data + i, std::move(_data[i + 1]));
+      construct_at(_data + i, std::move(_data[i + 1]));
     --_size;
     return _data + idx;
   }
@@ -440,10 +459,10 @@ public:
     size_type num_to_erase = last_idx - first_idx;
 
     for (size_type i = first_idx; i < last_idx; ++i)
-      std::destroy_at(_data + i);
+      destroy_at(_data + i);
 
     for (size_type i = first_idx; i < _size - num_to_erase; ++i)
-      std::construct_at(_data + i, std::move(_data[i + num_to_erase]));
+      construct_at(_data + i, std::move(_data[i + num_to_erase]));
 
     _size -= num_to_erase;
     return iterator(_data + first_idx);
