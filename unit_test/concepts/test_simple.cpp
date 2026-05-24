@@ -124,52 +124,41 @@ template <typename T> class static_memory_mock {
 
 public:
   constexpr static_memory_mock() : _data{} {}
-  constexpr T *allocate(std::size_t n) {
-    T *ptr = &_data[_offset];
+  // Returns an offset, NOT a pointer. A constexpr value whose member
+  // points into another of its own members is a subobject self-reference
+  // and cannot be a constant expression — offsets sidestep that.
+  constexpr std::size_t allocate(std::size_t n) {
+    auto base = _offset;
     _offset += n;
-    return ptr;
+    return base;
   }
+  constexpr T &at(std::size_t i) { return _data[i]; }
+  constexpr const T &at(std::size_t i) const { return _data[i]; }
 };
-// clang-format off
+
 template <typename T> struct static_container {
   static_memory_mock<T> _memory;
   std::size_t _size = 0;
-  std::size_t _capacity = 0; // Default capacity
-  T *_data = nullptr;
+  std::size_t _capacity = 0;
+  std::size_t _offset = 0;
+  bool _allocated = false;
 
 public:
-  constexpr static_container() : _memory(), _data{} {}
-  constexpr void push_back(int value) { 
-    if (_data == nullptr) {
-      _data = _memory.allocate(100);
-      _capacity = 100;
-    }
-    _data[_size++] = value;
-  }
-  constexpr int operator[](std::size_t index) const { 
-    return _data + index;
-  }
-  // copy constructor
-  constexpr static_container(const static_container &other): _memory() {
-    _data = _memory.allocate(other._capacity);
-    _size = other._size;
-    _capacity = other._capacity;
-  }
-  // copy operator
-  constexpr static_container &operator=(const static_container &other) {
-    if (this != &other) {
-      _data = _memory.allocate(other._capacity);
-      _size = other._size;
-      _capacity = other._capacity;
-      for (std::size_t i = 0; i < _size; ++i) {
-        _data[i] = other._data[i];
-      }
-    }
-    return *this;
-  }
-};
+  constexpr static_container() = default;
 
-// clang-format on
+  constexpr void push_back(const T &value) {
+    if (!_allocated) {
+      _offset = _memory.allocate(100);
+      _capacity = 100;
+      _allocated = true;
+    }
+    _memory.at(_offset + _size++) = value;
+  }
+  constexpr const T &operator[](std::size_t index) const {
+    return _memory.at(_offset + index);
+  }
+  constexpr std::size_t size() const { return _size; }
+};
 
 constexpr auto get_simple_static_container() {
   simple_static_container<int> sc;
@@ -192,9 +181,10 @@ int main() {
   static_assert(m.size() == 2, "First element should be 1");
   static_assert(m[0] == 1, "First element should be 1");
 
-  // TODO: static_container<int>::_data ends up pointing into _memory's own
-  // storage, which makes the result not a constant expression (subobject
-  // self-reference in a constexpr value). Re-enable after redesigning
-  // static_container so it doesn't store a pointer into its own member.
-  // constexpr auto sc = get_static_container();
+  // static_container now stores an offset instead of a pointer into its
+  // own _memory member, so it survives as a constexpr value.
+  constexpr auto sc = get_static_container();
+  static_assert(sc.size() == 2);
+  static_assert(sc[0] == 1);
+  static_assert(sc[1] == 2);
 }
