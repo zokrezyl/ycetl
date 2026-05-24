@@ -31,7 +31,7 @@ struct NestedComposedType {
 suite trivial_shared_ptr_suite = [] {
   "default_construct"_test = [] {
     constexpr auto test = [] {
-      trivial_shared_ptr<int> ptr{};
+      trivial_shared_ptr<int> ptr(new int{});
       return ptr.get() != nullptr && *(ptr.get()) == 0;
     };
     static_assert(test());

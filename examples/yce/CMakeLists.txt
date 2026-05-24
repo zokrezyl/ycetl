@@ -18,7 +18,7 @@ set(CMAKE_CXX_EXTENSIONS OFF) # disables -std=gnu++20, enforces -std=c++20
 add_compile_options(-fconstexpr-loop-limit=1000000000 -fconstexpr-ops-limit=1000000000)
 
 include(../../cmake/CPM.cmake)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
 #CPMAddPackage("gh:fmtlib/fmt#11.2.0") # is added by spdlog
 #CPMAddPackage("gh:fmtlib/fmt#master") # is added by spdlog

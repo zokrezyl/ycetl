@@ -4,7 +4,7 @@
 #include <ycetl/memory.hpp>
 
 using namespace boost::ut;
-using ycetl::list;
+using namespae ycetl;
 
 struct Test {
   int value;
@@ -14,8 +14,8 @@ struct Test {
 suite list_suite = [] {
   "empty_list"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> l(allocator);
       return l.empty() && l.size() == 0_u;
@@ -25,8 +25,8 @@ suite list_suite = [] {
 
   "list_with_values"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> l({1, 2, 3}, allocator);
       return l.size() == 3_u && l.front() == 1_i && l.back() == 3_i;
@@ -36,8 +36,8 @@ suite list_suite = [] {
 
   "push_back_and_front"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> l(allocator);
       l.push_back(10);
@@ -49,8 +49,8 @@ suite list_suite = [] {
 
   "emplace_back"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<Test>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<Test>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<Test, allocator_t> l(allocator);
       l.emplace_back(42);
@@ -61,8 +61,8 @@ suite list_suite = [] {
 
   "copy_construct"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> a({1, 2, 3}, allocator);
       list<int, allocator_t> b = a;
@@ -73,8 +73,8 @@ suite list_suite = [] {
 
   "move_construct"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> a({7, 8}, allocator);
       list<int, allocator_t> b = std::move(a);
@@ -85,8 +85,8 @@ suite list_suite = [] {
 
   "clear_and_reuse"_test = [] {
     constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::list<int>>;
-      using allocator_t = ycetl::default_allocator<relevant_types>;
+      using relevant_types = relevant_types_t<list<int>>;
+      using allocator_t = default_allocator<relevant_types>;
       allocator_t allocator;
       list<int, allocator_t> l({1, 2}, allocator);
       l.clear();

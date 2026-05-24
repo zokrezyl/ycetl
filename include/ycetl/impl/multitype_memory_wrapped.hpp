@@ -8,7 +8,6 @@
 namespace ycetl {
 namespace memory {
 
-#if 0
 template <template <typename> class MemoryBackend, typename TypeSet>
 class multitype_memory : public multitype_handler<MemoryBackend, TypeSet> {
 public:
@@ -25,19 +24,7 @@ public:
   }
 };
 
-#endif
-
 #if 0
-template <template <typename> class MemoryBackend, typename... Ts>
-constexpr auto make_shared_handlers(type_set<Ts...>) {
-  return multitype_handler<
-      trivial_shared_ptr,
-      apply_wrapper_t<trivial_shared_ptr,
-                      apply_wrapper_t<MemoryBackend, type_set<Ts...>>>>{
-      trivial_shared_ptr<MemoryBackend<Ts>>(new MemoryBackend<Ts>{})...};
-}
-#endif
-
 template <template <typename> class MemoryBackend, typename TypeSet>
 class multitype_memory
     : public multitype_handler<
@@ -45,7 +32,17 @@ class multitype_memory
           apply_wrapper_t<trivial_shared_ptr,
                           apply_wrapper_t<MemoryBackend, TypeSet>>> {
 public:
+  using handler_type = multitype_handler<
+      trivial_shared_ptr,
+      apply_wrapper_t<trivial_shared_ptr,
+                      apply_wrapper_t<MemoryBackend, TypeSet>>>;
+
   using type_set = TypeSet;
+
+  constexpr multitype_memory() : handler_type{} {}
+
+  constexpr multitype_memory(const handler_type &shared_handlers)
+      : handler_type(shared_handlers) {}
 
   template <typename T> constexpr T *allocate(std::size_t n) {
     return this->template get_handler<trivial_shared_ptr<MemoryBackend<T>>>()
@@ -60,5 +57,6 @@ public:
   }
 };
 
+#endif
 } // namespace memory
 } // namespace ycetl

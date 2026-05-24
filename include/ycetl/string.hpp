@@ -13,9 +13,12 @@ class string : public basic_string<char, std::char_traits<char>, Memory> {
       typename basic_string<char, std::char_traits<char>, Memory>::relevant_of;
 };
 #else
-template <typename Memory =
-              typename container::container_traits<char>::default_memory>
-using string = ycetl::basic_string<char, std::char_traits<char>, Memory>;
+template <
+    typename Memory = typename container::container_traits<
+        basic_string, type_set<char, std::char_traits<char>>>::default_memory>
+
+using string = ycetl::basic_string<char, std::char_traits<char>,
+                                   container::by_value, Memory>;
 
 #endif
 

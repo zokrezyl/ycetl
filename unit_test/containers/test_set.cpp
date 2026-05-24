@@ -1,5 +1,5 @@
 #include <boost/ut.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
+#include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/memory.hpp>
 #include <ycetl/set.hpp>
 

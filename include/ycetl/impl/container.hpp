@@ -8,86 +8,93 @@ namespace ycetl {
 
 namespace container {
 
-template <typename T> struct container_traits {
-  // The fundamental unit of storage for the given ElementType.
-  // This assumes backend_type_of_t is defined elsewhere and is generic enough.
+struct by_value {};     // used to indicate that the container is by value
+struct by_reference {}; // used to indicate that the container is by reference
+//
+template <typename T> struct container_traits_helper {
   using storage_unit = backend_type_of_t<T>;
-  using backend_type = dynamic_array<storage_unit>;
 
-  // Type alias for relevant types for default_memory calculation.
-  // This is typically the ElementType itself and its storage_unit.
   using relevant_of = relevant_types_t<T, storage_unit>;
-
   using default_memory = ::ycetl::default_memory<relevant_of>;
-
-  // Add any other common types or deduction logic here if needed by various
-  // containers For example, if you had a default backend type that was always
-  // dynamic_array: using default_backend_type = dynamic_array<storage_unit>;
 };
 
-template <template <typename...> typename ContainerTemplate,
-          typename T, // This is the element type of *this* container
-          typename Memory = container_traits<T>::default_memory>
-class container : public ycetl::template_info<ContainerTemplate, T, Memory> {
+template <template <typename...> typename ContainerTemplate, typename TypeSet,
+          typename BackendMode = by_value,
+          typename Memory =
+              typename container_traits_helper<TypeSet>::default_memory>
+struct container_traits;
 
-public:
-  // The core element type this container logically holds.
-  // If T is a nested container that can be memory-rebound,
-  // its memory type is swapped for this container's Memory.
-  // Otherwise, T is used as is.
-  using value_type = std::conditional_t<
-      ycetl::has_rebindable_memory_v<T>, // Condition: Is T a memory-rebindable
-                                         // type?
-      ycetl::rebind_memory_t<T, Memory>, // True: Rebind T's memory to current
-                                         // container's Memory.
-      T                                  // False: Use T as is.
-      >;
+// Specialization clearly isolating Memory and BackendMode from Args...
+template <template <typename...> typename ContainerTemplate,
+          typename... LeadingArgs, typename BackendMode, typename Memory>
+struct container_traits<ContainerTemplate, type_set<LeadingArgs...>,
+                        BackendMode, Memory>
+    : public ycetl::template_info<ContainerTemplate, LeadingArgs...,
+                                  BackendMode, Memory> {
+  static_assert(!std::is_same_v<Memory, by_value> &&
+                    !std::is_same_v<Memory, by_reference>,
+                "container_traits: Memory and BackendMode template args appear "
+                "swapped -- expected order is "
+                "<ContainerTemplate, type_set<...>, BackendMode, Memory>.");
 
   using memory_type = Memory;
-  using storage_unit = typename container_traits<T>::storage_unit;
-  using backend_type = typename container_traits<T>::backend_type;
-  using relevant_of = typename container_traits<T>::relevant_of;
 
-  // --- Static Asserts to verify consistency ---
-  // These checks ensure that the rebinding mechanism does not alter the
-  // fundamental storage characteristics of the nested type, only its allocator.
+  // Helper deduces relevant types from the first type (commonly value_type)
+  using helper = container_traits_helper<first_type_t<LeadingArgs...>>;
 
-  // Check if the storage_unit derived from original T is the same as from the
-  // (potentially) rebound value_type.
-#if 0
-  static_assert(
-      std::is_same_v<typename container_traits<T>::storage_unit,
-                     typename container_traits<value_type>::storage_unit>,
-      "Container storage_unit mismatch after value_type rebinding. "
-      "backend_type_of_t might be sensitive to allocator changes.");
+  using storage_unit = typename helper::storage_unit;
 
-  // Check if the backend_type derived from original T is the same as from the
-  // (potentially) rebound value_type.
-  static_assert(
-      std::is_same_v<typename container_traits<T>::backend_type,
-                     typename container_traits<value_type>::backend_type>,
-      "Container backend_type mismatch after value_type rebinding. "
-      "dynamic_array instantiation might be sensitive to allocator changes.");
+  using relevant_of = typename helper::relevant_of;
+  using default_memory = typename helper::default_memory;
 
-  // Check if the relevant_of types derived from original T are the same as from
-  // the (potentially) rebound value_type.
-  static_assert(
-      std::is_same_v<typename container_traits<T>::relevant_of,
-                     typename container_traits<value_type>::relevant_of>,
-      "Container relevant_of types mismatch after value_type rebinding. "
-      "relevant_types_t might be sensitive to allocator changes.");
-#endif
+  // The "view_type" uses by_reference mode explicitly.
+  using view_type =
+      ContainerTemplate<LeadingArgs..., by_reference, memory_type>;
+
+  // The "value_type" is conditionally rebound to Memory, if possible.
+  using value_type = std::conditional_t<
+      ycetl::has_rebindable_memory_v<first_type_t<LeadingArgs...>>,
+      ycetl::rebind_memory_t<first_type_t<LeadingArgs...>, memory_type>,
+      first_type_t<LeadingArgs...>>;
+
+  using pointer = pointer_type_t<storage_unit, memory_type>;
+  using backend_type_raw =
+      dynamic_array<storage_unit, typed_memory_t<storage_unit, memory_type>>;
+
+  using backend_type = std::conditional_t<std::is_same_v<BackendMode, by_value>,
+                                          backend_type_raw, backend_type_raw &>;
+
+  using reference = value_type &;
+  using const_reference = const value_type &;
+  using const_pointer = const pointer;
+  using size_type = std::size_t;
+  using difference_type = std::ptrdiff_t;
 };
 
-#if 0
-// example Derived containers
-template <typename T, typename Memory>
-struct vector : container_traits<T, Alloccator> {};
+template <template <typename...> typename ContainerTemplate, typename... Args>
+class container : public ycetl::template_info<ContainerTemplate, Args...> {
 
-template <typename T, typename Memory>
-struct set : container_traits<T, Memory> {};
+public:
+  using traits =
+      container_traits<ContainerTemplate,
+                       type_set_init_t<type_set_init_t<type_set<Args...>>>,
+                       type_set_back_t<type_set_init_t<type_set<Args...>>>,
+                       type_set_back_t<type_set<Args...>>>;
 
-#endif
+  using backend_type = typename traits::backend_type;
+  using storage_unit = typename traits::storage_unit;
+  using relevant_of = typename traits::relevant_of;
+  using memory_type = typename traits::memory_type;
+  using value_type = typename traits::value_type;
+  using view_type = typename traits::view_type;
+
+  using reference = typename traits::reference;
+  using const_reference = typename traits::const_reference;
+  using pointer = typename traits::pointer;
+  using const_pointer = typename traits::const_pointer;
+  using size_type = typename traits::size_type;
+  using difference_type = typename traits::difference_type;
+};
 
 } // namespace container
 } // namespace ycetl

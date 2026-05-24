@@ -1,100 +1,217 @@
-/*──────────────────────────────────────────────────────────────────────────────
-  test_dynamic_memory.cpp   – constexpr‑time checks
-──────────────────────────────────────────────────────────────────────────────*/
 #include <boost/ut.hpp>
-
 #include <ycetl/dynamic_array.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
-#include <ycetl/impl/multitype_memory.hpp>
+#include <ycetl/memory.hpp>
 #include <ycetl/types.hpp>
 
 using namespace boost::ut;
-namespace mem = ycetl::memory;
+using namespace ycetl;
 
-/* shorthand for a simple dynamic_memory */
-template <class T> using dyn_alloc = mem::dynamic_memory<T>;
-/*──────────────────────────────────────────────────────────────────────────────
-  Extra checks for dynamic_memory & multitype_memory (constexpr only)
-──────────────────────────────────────────────────────────────────────────────*/
-suite memory_suite = [] {
-  /* single‑type memory, fundamental ---------------------------------- */
-  "dyn_alloc_round_trip_int"_test = [] {
+struct NonTrivial {
+  int id;
+  constexpr NonTrivial(int i = 0) : id(i) {}
+  constexpr bool operator==(const NonTrivial &other) const {
+    return id == other.id;
+  }
+};
+
+suite dynamic_array_suite_1 = [] {
+  "default_construction"_test = [] {
+    constexpr auto test_lambda = [] {
+      dynamic_array<int> arr;
+      return arr.size() == 0_u && arr.capacity() == 0_u;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+  "size_constructor"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, 5);
+      bool ok = arr.size() == 5_u && arr.capacity() == 5_u;
+      for (auto v : arr)
+        ok = ok && v == 0;
+      // arr.clear_and_deallocate_buffer(alloc);
+      return ok;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+
+  "initializer_list_constructor"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {10, 20, 30});
+      bool ok = arr.size() == 3_u && arr[0] == 10 && arr[2] == 30;
+      // arr.clear_and_deallocate_buffer(alloc);
+      return ok;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+
+  "push_back_nontrivial"_test = [] {
+    auto test_lambda = [] {
+      default_memory<NonTrivial> alloc{};
+      dynamic_array<NonTrivial> arr(alloc);
+      arr.push_back(NonTrivial(1));
+      arr.push_back(NonTrivial(2));
+      bool ok = arr.size() == 2_u && arr[0].id == 1 && arr[1].id == 2;
+      // arr.clear_and_deallocate_buffer(alloc);
+      return ok;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+
+  "insert_middle"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 4});
+      arr.insert(arr.begin() + 2, 3);
+      bool ok = arr.size() == 4_u && arr[2] == 3;
+      // arr.clear_and_deallocate_buffer(alloc);
+      return ok;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+
+  "resize_grow"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2});
+      arr.resize(5);
+      bool ok = arr.size() == 5_u && arr[2] == 0 && arr[4] == 0;
+      // arr.clear_and_deallocate_buffer(alloc);
+      return ok;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+
+  "clear_and_deallocate_buffer_0"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 3});
+      // arr.clear_and_deallocate_buffer(alloc);
+      arr.clear();
+      return arr.size() == 0_u;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+  "clear_keeps_capacity"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 3});
+      arr.clear();
+      // std::vector::clear() semantics: size resets, capacity is preserved.
+      return arr.size() == 0_u && arr.capacity() == 3_u;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+  "clear_and_deallocate_buffer_1"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 3});
+      arr.clear_and_deallocate_buffer();
+      return arr.capacity() == 0_u;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+  "clear_and_deallocate_buffer_2"_test = [] {
+    auto test_lambda = [] {
+      default_memory<int> alloc{};
+      dynamic_array<int> arr(alloc, {1, 2, 3});
+      arr.clear_and_deallocate_buffer();
+      return arr.begin() == nullptr;
+    };
+    static_assert(test_lambda());
+    expect(test_lambda());
+  };
+};
+
+suite dynamic_array_suite_2 = [] {
+  "dynamic_array_basic"_test = [] {
     constexpr auto test = [] {
-      ycetl::memory::dynamic_memory<int> a;
-      int *p = a.allocate(4);
-      for (int i = 0; i < 4; ++i)
-        p[i] = i + 1; // 1 2 3 4
+      using memory_t = default_memory<int>;
+      memory_t memory;
+
+      dynamic_array<int> arr(memory, 4);
+      for (int i = 0; i < 4; ++i) {
+        arr[i] = i + 1;
+      }
+
       int sum = 0;
       for (int i = 0; i < 4; ++i)
-        sum += p[i];
-      a.deallocate(p, 4);
-      return sum == 10_i; // 1+2+3+4
+        sum += arr[i];
+
+      return sum == 10;
     };
+    static_assert(test());
     expect(test());
   };
 
-  "dyn_alloc_round_trip_double"_test = [] {
+  "dynamic_array_copy"_test = [] {
     constexpr auto test = [] {
-      ycetl::memory::dynamic_memory<double> a;
-      double *p = a.allocate(3);
-      p[0] = 1.5;
-      p[1] = 2.5;
-      p[2] = 3.0;
-      double prod = p[0] * p[1] * p[2];
-      a.deallocate(p, 3);
-      return prod > 10.0_d && prod < 12.0_d;
+      using memory_t = default_memory<int>;
+      memory_t memory;
+
+      dynamic_array<int> original(memory, 3);
+      for (int i = 0; i < 3; ++i) {
+        original[i] = i + 10;
+      }
+
+      dynamic_array<int> copy(memory, original);
+      return copy.size() == original.size() && copy[2] == 12;
     };
+    static_assert(test());
     expect(test());
   };
 
-  /* multitype memory with two POD types ------------------------------ */
-  "multitype_alloc_int_double"_test = [] {
+  "dynamic_array_move"_test = [] {
     constexpr auto test = [] {
-      using types = ycetl::type_set<int, double>;
-      ycetl::memory::multitype_memory<ycetl::memory::dynamic_memory, types> st;
+      using memory_t = default_memory<int>;
+      memory_t memory;
 
-      int *pi = st.template allocate<int>(2);
-      double *pd = st.template allocate<double>(1);
+      dynamic_array<int> arr(memory, 3);
+      for (int i = 0; i < 3; ++i) {
+        // std::construct_at(arr.data() + i);
+        arr[i] = i;
+      }
 
-      pi[0] = 7;
-      pi[1] = 11;
-      pd[0] = 2.0;
-
-      bool ok = (pi[0] + pi[1] == 18 && pd[0] == 2.0_d);
-
-      st.template deallocate<int>(pi);
-      st.template deallocate<double>(pd);
-      return ok;
+      dynamic_array<int> moved = std::move(arr);
+      return moved.size() == 3 && moved[1] == 1;
     };
+    static_assert(test());
     expect(test());
   };
 
-  /* multitype memory + nested dynamic_array backend ------------------ */
-  "multitype_alloc_dynamic_array_backend"_test = [] {
+  "dynamic_array_resize"_test = [] {
     constexpr auto test = [] {
-      using backends =
-          ycetl::type_set<int, ycetl::dynamic_array<int>,
-                          ycetl::dynamic_array<ycetl::dynamic_array<int>>>;
+      using memory_t = default_memory<int>;
+      memory_t memory;
 
-      ycetl::memory::multitype_memory<ycetl::memory::dynamic_memory, backends>
-          st;
+      dynamic_array<int> arr(memory, 2);
+      arr[0] = 1;
+      arr[1] = 2;
 
-      /* allocate and build a dynamic_array<int> of size 3 */
-      auto *buf = st.template allocate<ycetl::dynamic_array<int>>(1);
-      new (buf) ycetl::dynamic_array<int>(st, 3);
+      arr.resize(4);
+      arr[2] = 3;
+      arr[3] = 4;
 
-      (*buf)[0] = 4;
-      (*buf)[1] = 5;
-      (*buf)[2] = 6;
+      bool expanded = arr.size() == 4 && arr[2] == 3 && arr[3] == 4;
 
-      bool ok = ((*buf).size() == 3_u && (*buf)[2] == 6_i);
+      arr.resize(1);
+      bool shrunk = arr.size() == 1 && arr[0] == 1;
 
-      buf->~dynamic_array<int>();
-      st.template deallocate<ycetl::dynamic_array<int>>(buf);
-      return ok;
+      return expanded && shrunk;
     };
+    static_assert(test());
     expect(test());
   };
 };
 
-int main(int argc, char **argv) { return 0; }
+int main() { return 0; }

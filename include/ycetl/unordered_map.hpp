@@ -37,8 +37,8 @@ public:
   using key_equal = KeyEqual;
 
 private:
-  owned_pointer<Allocator> _alloc_ptr;
-  owned_pointer<storage_type> _storage;
+  Memory _memory;
+  storage_type _storage;
 
   hasher _hasher;
   key_equal _key_equal;

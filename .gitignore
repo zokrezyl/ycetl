@@ -1,7 +1,6 @@
 errors.err
 CMakeFiles/
 CMakeCache.txt
-Makefile
 .cache/
 _deps/
 .clangd
@@ -11,3 +10,22 @@ cmake_install.cmake
 compile_commands.json
 errors.err
 CTestTestfile.cmake
+build/
+build-linux/
+tmp/
+
+# Legacy in-source build artifacts left over in test/
+test/Makefile
+test/out
+test/errors.txt
+test/cindex
+test/test_allocator
+test/test_allocator_ptr
+test/test_constexpr
+test/test_object_pool
+test/test_trace
+test/test_trivial_array
+test/test_vector
+
+# CMakePresets backup variants (e.g. __CMakePresets_with_inheritance.json)
+**/__*.json

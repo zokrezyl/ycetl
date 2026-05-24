@@ -8,6 +8,12 @@ template <typename... Ts> struct type_set {
   template <template <typename...> typename T> using apply = T<Ts...>;
 };
 
+template <typename First, typename... Rest> struct first_type {
+  using type = First;
+};
+
+template <typename... Ts> using first_type_t = typename first_type<Ts...>::type;
+
 // Concatenates multiple type_sets into one.
 template <typename...> struct type_set_concat;
 
@@ -76,6 +82,11 @@ struct remove_duplicates<type_set<Head, Tail...>, type_set<Rs...>> {
 // Helper alias to simplify usage of remove_duplicates.
 template <typename Set>
 using remove_duplicates_t = typename remove_duplicates<Set>::type;
+
+// for a given mixed set of types, concatenate them into a single type_set by
+// evaluating inner type_sets and eliminating duplicates
+template <typename... Args>
+using flat_type_set_t = remove_duplicates_t<type_set_concat_t<Args...>>;
 
 // Extracts relevant associated types from a type (if available).
 template <typename T, typename = void> struct relevant_types_of {

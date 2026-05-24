@@ -3,111 +3,130 @@
 // #include <cstring>
 #include <memory>
 // #include <ycetl/allocator_traits.hpp>
-#include <ycetl/impl/dynamic_memory.hpp>
-#include <ycetl/impl/multitype_memory.hpp>
-#include <ycetl/impl/static_memory.hpp>
+#include <ycetl/multitype_memory.hpp>
+#include <ycetl/trivial_shared_ptr.hpp>
+#include <ycetl/typed_dynamic_memory.hpp>
+#include <ycetl/typed_static_memory.hpp>
 #include <ycetl/types.hpp>
 
 namespace ycetl {
 
-template <typename T> class owned_pointer {
-  T *_ptr = nullptr;
-  bool _owned = true;
-
-public:
-  constexpr owned_pointer() : _ptr(new T()) {}
-  template <typename... Args>
-  constexpr owned_pointer(Args &&...args)
-      : _ptr(new T(std::forward<Args>(args)...)) {}
-  constexpr owned_pointer(T *p) : _ptr(p), _owned(false) {}
-  owned_pointer(const owned_pointer &) = delete;
-  owned_pointer &operator=(const owned_pointer &) = delete;
-
-  constexpr owned_pointer(owned_pointer &&other) noexcept
-      : _ptr(other._ptr), _owned(other._owned) {
-    other._ptr = nullptr;
-    other._owned = false;
-  }
-
-  constexpr owned_pointer &operator=(owned_pointer &&other) noexcept {
-    if (this != &other) {
-      if (_owned && _ptr)
-        delete _ptr;
-      _ptr = other._ptr;
-      _owned = other._owned;
-      other._ptr = nullptr;
-      other._owned = false;
-    }
-    return *this;
-  }
-
-  constexpr ~owned_pointer() {
-    if (_owned && _ptr)
-      delete _ptr; // ← honour non‑owned case
-  }
-  constexpr T *get() { return _ptr; }
-  constexpr const T *get() const { return _ptr; }
-  constexpr T &operator*() { return *_ptr; }
-  constexpr const T &operator*() const { return *_ptr; }
-
-  constexpr T *operator->() { return _ptr; }
-  constexpr const T *operator->() const { return _ptr; }
-};
-
 template <typename T, typename MultitypeMemory>
-constexpr T *allocate(MultitypeMemory &alloc, std::size_t n) {
+constexpr auto allocate(MultitypeMemory &alloc, std::size_t n) {
   return alloc.template allocate<T>(n);
 }
 
-template <typename TypeSet>
-using multitype_dynamic_memory =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, TypeSet>;
+template <typename T, typename MultitypeMemory>
+constexpr void deallocate(MultitypeMemory &alloc,
+                          pointer_type_t<T, MultitypeMemory> ptr,
+                          std::size_t n) {
+  alloc.template deallocate<T>(ptr, n);
+}
 
-//
-template <typename T>
-using default_memory =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::dynamic_memory, T>;
+template <typename PointerType, typename... Args>
+constexpr PointerType construct_at(PointerType ptr, Args &&...args) {
+  return std::construct_at(ptr.get(), std::forward<Args>(args)...);
+}
 
-template <typename T>
-using static_memory_t =
-    ::ycetl::memory::multitype_memory<::ycetl::memory::static_memory, T>;
+template <typename PointerType> constexpr void destroy_at(PointerType ptr) {
+  std::destroy_at(ptr.get());
+}
 
-namespace memory {
+template <typename Backend, typename... Args>
+constexpr static_synthetic_pointer<Backend>
+construct_at(static_synthetic_pointer<Backend> ptr, Args &&...args) {
+  std::construct_at(ptr.get(), std::forward<Args>(args)...);
+  return ptr;
+}
+
+template <typename Backend, typename... Args>
+constexpr dynamic_synthetic_pointer<Backend>
+construct_at(dynamic_synthetic_pointer<Backend> ptr, Args &&...args) {
+  std::construct_at(ptr.get(), std::forward<Args>(args)...);
+  return ptr;
+}
+
+// helper function to allocate and construct an object of type array of T
+template <typename T, typename MultitypeMemory, typename... Args>
+constexpr auto allocate_and_construct_n(MultitypeMemory &alloc, std::size_t n,
+                                        Args &&...args) {
+  auto ptr = allocate<T>(alloc, n);
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(ptr + i, std::forward<Args>(args)...);
+  }
+  return ptr;
+}
+
+template <typename PointerType, typename... Args>
+constexpr auto construct_n(PointerType ptr, std::size_t n, Args &&...args) {
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(ptr + i, std::forward<Args>(args)...);
+  }
+  return ptr;
+}
+
+// Version for synthetic pointer (has .get())
+template <typename SrcPointerType, typename DestPointerType>
+  requires requires { typename SrcPointerType::value_type; }
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i)
+    construct_at(dest + i, *(src + i).get());
+  return dest;
+}
+
+// Version for raw pointer
+template <typename SrcPointerType, typename DestPointerType>
+  requires(!requires { typename SrcPointerType::value_type; })
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i)
+    construct_at(dest + i, *(src + i));
+  return dest;
+}
+
 #if 0
-template <typename InputIt, typename OutputIt, typename Alloc>
-constexpr OutputIt uninitialized_move(InputIt first, InputIt last,
-                                      OutputIt dest, Alloc &alloc) {
-  for (; first != last; ++first, ++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              std::move(*first));
+template <typename SrcPointerType, typename DestPointerType>
+constexpr auto copy_construct_n(SrcPointerType src, std::size_t n,
+                                DestPointerType dest) {
+  for (std::size_t i = 0; i < n; ++i) {
+    construct_at(dest + i, *(src + i).get());
+  }
   return dest;
 }
-
-template <typename InputIt, typename OutputIt, typename Alloc>
-OutputIt uninitialized_copy(InputIt first, InputIt last, OutputIt dest,
-                            Alloc &alloc) {
-  for (; first != last; ++first, (void)++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              *first);
-  return dest;
-}
-
-template <typename InputIt, typename OutputIt, typename Alloc>
-constexpr OutputIt uninitialized_move_if_noexcept(InputIt first, InputIt last,
-                                                  OutputIt dest, Alloc &alloc) {
-  for (; first != last; ++first, ++dest)
-    ycetl::allocator_traits<Alloc>::construct(alloc, std::addressof(*dest),
-                                              std::move_if_noexcept(*first));
-  return dest;
-}
-
-template <typename ForwardIt, typename Alloc>
-constexpr void destroy(ForwardIt first, ForwardIt last, Alloc &alloc) {
-  for (; first != last; ++first)
-    ycetl::allocator_traits<Alloc>::destroy(alloc, std::addressof(*first));
-}
-
 #endif
 
-} // namespace memory
+template <typename T, typename MultitypeMemory>
+constexpr void destroy_and_deallocate_n(MultitypeMemory &alloc, T *ptr,
+                                        std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
+    std::destroy_at(ptr + i);
+  }
+  deallocate<T>(alloc, ptr, n);
+}
+
+template <typename T, typename MultitypeHandler>
+constexpr auto get(MultitypeHandler &multitype_handler) {
+  return multitype_handler.template get_handler<T>();
+}
+
+template <typename T, typename MultitypeHandler>
+constexpr auto get(const MultitypeHandler &multitype_handler) -> const
+    decltype(multitype_handler.template get_handler<T>()) {
+  return multitype_handler.template get_handler<T>();
+}
+
+template <typename... RawType>
+using dynamic_memory = multitype_memory<typed_dynamic_memory, RawType...>;
+
+template <typename... RawType>
+using default_memory = dynamic_memory<RawType...>;
+
+template <typename... RawType>
+using static_memory = multitype_memory<typed_static_memory, RawType...>;
+
+template <typename T_Rebindable>
+using static_t = rebind_memory_t<T_Rebindable,
+                                 static_memory<relevant_types_t<T_Rebindable>>>;
+
 } // namespace ycetl

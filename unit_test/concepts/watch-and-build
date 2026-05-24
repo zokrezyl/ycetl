@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+watch_files() {
+  #ls -1 && ls -1 -d ../include/ycetl/*
+  ls -1 
+}
+
+run_build_and_test_preset() {
+  preset="$1"
+  set -e
+  cmake --build --preset $preset
+  ctest --preset $preset
+  set +e
+}
+
+
+if [[ "$1" == "--run" ]]; then
+  shift
+  #run_build_and_test_preset gcc
+  run_build_and_test_preset clang
+else
+  TARGET="$1"
+  watch_files | entr "$0" --run "$TARGET"
+fi
+

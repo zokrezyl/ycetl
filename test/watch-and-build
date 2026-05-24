@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+watch_files() {
+  ls -1 && ls -1 -d ../include/ycetl/*
+}
+
+run_build_and_test_target() {
+  set -e
+  cmake --build --preset default --target "$1"
+  build/default/"$1"
+}
+
+run_build_and_test() {
+  run_build_and_test_target test_container_template_trait
+}
+
+if [[ "$1" == "--run" ]]; then
+  shift
+  if [[ -n "$1" ]]; then
+    run_build_and_test_target "$1"
+  else
+    run_build_and_test
+  fi
+else
+  TARGET="$1"
+  watch_files | entr "$0" --run "$TARGET"
+fi
+
