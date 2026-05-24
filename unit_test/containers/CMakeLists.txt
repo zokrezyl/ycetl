@@ -58,17 +58,26 @@ create_test_executable(test_stack)
 create_test_executable(test_priority_queue)
 create_test_executable(test_unordered_set)
 create_test_executable(test_map)
-
-if(FALSE)
-create_test_executable(test_basic_string)
-
-create_test_executable(test_basic_string_with_static_memory)
-
-
 create_test_executable(test_set)
+create_test_executable(test_unordered_map)
+create_test_executable(test_unique_ptr)
+create_test_executable(test_weak_ptr)
+create_test_executable(test_bitset)
+create_test_executable(test_multiset)
+create_test_executable(test_multimap)
+create_test_executable(test_unordered_multiset)
+create_test_executable(test_unordered_multimap)
+
+# These are pinned to the old container::container<>-based design and
+# never compiled. Leave gated until either the underlying glue is
+# fixed/dropped or the tests are rewritten to the dynamic_array-backed
+# successor implementations (as test_set / test_unordered_map already
+# were).
+if(FALSE)
+  create_test_executable(test_basic_string)
+  create_test_executable(test_basic_string_with_static_memory)
   create_test_executable(test_basic_string_return)
   create_test_executable(test_basic_string_with_memory)
   create_test_executable(test_list)
-  create_test_executable(test_unordered_map)
   create_test_executable(test_vector)
 endif()

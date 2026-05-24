@@ -1,91 +1,77 @@
 #include <boost/ut.hpp>
-#include <ycetl/impl/typed_dynamic_memory.hpp>
 #include <ycetl/memory.hpp>
 #include <ycetl/set.hpp>
 
 using namespace boost::ut;
-using ycetl::set;
+using namespace ycetl;
 
 suite set_suite = [] {
-  "empty_set"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> s(memory);
-      return s.empty() && s.size() == 0_u;
+    "insert_and_contains"_test = [] {
+        constexpr auto t = [] {
+            default_memory<int> mem;
+            set<int> s(mem);
+            s.insert(5);
+            s.insert(2);
+            s.insert(8);
+            return s.size() == 3 && s.contains(2) && s.contains(8)
+                && !s.contains(99);
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "initializer_list_construct"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> s({3, 1, 2}, memory);
-      return s.size() == 3_u && s.contains(1) && s.contains(2) && s.contains(3);
+    "duplicate_insert_no_op"_test = [] {
+        constexpr auto t = [] {
+            default_memory<int> mem;
+            set<int> s(mem);
+            auto [it1, ins1] = s.insert(42);
+            auto [it2, ins2] = s.insert(42);
+            return ins1 && !ins2 && s.size() == 1;
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "insert_elements"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> s(memory);
-      s.insert(10);
-      s.insert(5);
-      s.insert(15);
-      return s.size() == 3_u && s.contains(10) && s.contains(5) &&
-             s.contains(15);
+    "iterates_in_sorted_order"_test = [] {
+        constexpr auto t = [] {
+            default_memory<int> mem;
+            set<int> s(mem);
+            for (int k : {5, 2, 8, 1, 9, 3}) s.insert(k);
+            int prev = -1;
+            bool ok = true;
+            for (auto &k : s) { ok = ok && k > prev; prev = k; }
+            return ok && prev == 9 && s.size() == 6;
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "copy_construct"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> a({1, 2, 3}, memory);
-      set<int, std::less<int>, memory_t> b = a;
-      return b.size() == 3_u && b.contains(2);
+    "erase_preserves_order"_test = [] {
+        constexpr auto t = [] {
+            default_memory<int> mem;
+            set<int> s(mem);
+            for (int k : {1, 2, 3, 4, 5}) s.insert(k);
+            bool ok = s.erase(3) == 1 && s.size() == 4 && !s.contains(3);
+            int prev = 0;
+            for (auto &k : s) { ok = ok && k > prev; prev = k; }
+            return ok && s.erase(999) == 0;
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "move_construct"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> a({4, 5}, memory);
-      set<int, std::less<int>, memory_t> b = std::move(a);
-      return b.size() == 2_u && b.contains(4) && b.contains(5);
+    "find_returns_iterator"_test = [] {
+        constexpr auto t = [] {
+            default_memory<int> mem;
+            set<int> s(mem);
+            s.insert(10);
+            s.insert(20);
+            auto it = s.find(20);
+            return it != s.end() && *it == 20 && s.find(99) == s.end();
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
-
-  "clear_and_reuse"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = ycetl::relevant_types_t<ycetl::set<int>>;
-      using memory_t = ycetl::default_memory<relevant_types>;
-      memory_t memory;
-      set<int, std::less<int>, memory_t> s({1, 2}, memory);
-      s.clear();
-      s.insert(42);
-      return s.size() == 1_u && s.contains(42);
-    };
-    static_assert(test());
-    expect(test());
-  };
 };
 
-int main(int argc, char **argv) { return 0; }
+int main() {}
