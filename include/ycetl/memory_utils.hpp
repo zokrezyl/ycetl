@@ -46,8 +46,8 @@ template <typename To, typename Memory> constexpr To *allocate(Memory &mem) {
   std::size_t alignment = alignof(To);
   From *aligned_to_from_ptr = mem.ptr + mem.offset;
   void *aligned_ptr = static_cast<void *>(aligned_to_from_ptr);
-  void *aligned_to_to_ptr =
-      align(alignment, sizeof(To), aligned_ptr, remaining_size);
+  void *aligned_to_to_ptr = align(alignment, sizeof(To), aligned_ptr,
+                                  remaining_size);
   // write back the offset
   mem.offset = remaining_size;
   return static_cast<To *>(aligned_to_to_ptr);

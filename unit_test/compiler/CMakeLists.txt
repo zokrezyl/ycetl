@@ -13,7 +13,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 include(../../cmake/CPM.cmake)
 CPMAddPackage("gh:boost-ext/ut#master")
-CPMAddPackage("gh:zokrezyl/ytrace-private#main")
+CPMAddPackage("gh:zokrezyl/ytrace-private#b948bff5f656d9abe156abad3106f6fd0c758c9a")
 
 
 file(GLOB TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/test_*.cpp")

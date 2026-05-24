@@ -1,0 +1,103 @@
+# clang-format-20 configuration for ycetl
+# Based on LLVM style with project-specific tweaks.
+# Re-format the whole tree with: clang-format-20 -i $(git ls-files '*.hpp' '*.cpp')
+
+Language: Cpp
+Standard: c++20
+BasedOnStyle: LLVM
+
+ColumnLimit: 80
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ContinuationIndentWidth: 4
+
+# Pointer/reference glued to the variable: `T *p`, `T &r`.
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+DerivePointerAlignment: false
+
+# `public:` / `private:` sit at the class column (offset by -IndentWidth).
+AccessModifierOffset: -2
+
+# Namespaces: no extra indent, and add a closing-comment.
+NamespaceIndentation: None
+FixNamespaceComments: true
+ShortNamespaceLines: 0
+
+# Templates: break only when the head doesn't fit on one line.
+# Lets `template <typename T> using foo = ...;` stay single-line while
+# longer heads wrap onto their own line above the declaration.
+BreakTemplateDeclarations: MultiLine
+
+# `requires` clauses and the trailing return arrow stay on their own line
+# when they don't fit.
+RequiresClausePosition: OwnLine
+IndentRequiresClause: true
+
+# Initialiser lists / inheritance lists: hang under the colon when wrapped,
+# but bin-pack members onto shared lines until the column limit is hit.
+PackConstructorInitializers: BinPack
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+
+# Short blocks — match what's already in the codebase.
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: false
+
+# Always brace the body of control statements; clang-format won't add them
+# but won't strip them either (this is the conservative setting).
+InsertBraces: false
+
+# Argument / parameter packing: pack onto shared lines, wrap only when the
+# column limit is hit. Matches the existing codebase.
+BinPackArguments: true
+BinPackParameters: true
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Operator wrapping: break before binary/ternary ops when wrapping a long
+# expression — keeps the operator at the start of the continuation line.
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+AlignOperands: AlignAfterOperator
+
+# Spacing inside expressions.
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Includes.
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# Comments and strings.
+ReflowComments: true
+AlwaysBreakBeforeMultilineStrings: false
+
+# Trailing-comma niceness: keep them where present, don't aggressively add.
+InsertTrailingCommas: None
+
+# Penalties: leave at LLVM defaults — the existing code already lets the
+# return type break onto its own line when the signature is too long
+# (default PenaltyReturnTypeOnItsOwnLine = 60).
+PenaltyBreakAssignment: 50

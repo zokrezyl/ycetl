@@ -265,9 +265,9 @@ struct has_memory_type : std::false_type {};
 
 template <typename T>
 struct has_memory_type<
-    T, std::void_t<std::enable_if_t<std::is_class_v<T> ||
-                                    std::is_union_v<T>>, // Guard against
-                                                         // primitives
+    T, std::void_t<std::enable_if_t<std::is_class_v<T>
+                                    || std::is_union_v<T>>, // Guard against
+                                                            // primitives
                    typename T::memory_type>> : std::true_type {};
 
 // Helper variable template for convenience.
@@ -279,8 +279,8 @@ inline constexpr bool has_memory_type_v = has_memory_type<T>::value;
 // 1. The type exposes its template information (is_template_rebindable_v).
 // 2. The type explicitly declares a 'memory_type' alias (has_memory_type_v).
 template <typename T>
-inline constexpr bool has_rebindable_memory_v =
-    is_template_rebindable_v<T> && has_memory_type_v<T>;
+inline constexpr bool has_rebindable_memory_v = is_template_rebindable_v<T>
+                                             && has_memory_type_v<T>;
 
 // Alias template to rebind the memory type of a rebindable template.
 // It assumes the memory type is the last argument in the template's argument

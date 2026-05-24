@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF) # disables -std=gnu++20, enforces -std=c++20
 
 include(cmake/CPM.cmake)
 
-CPMAddPackage("gh:zokrezyl/ytrace-private#main")
+CPMAddPackage("gh:zokrezyl/ytrace-private#b948bff5f656d9abe156abad3106f6fd0c758c9a")
 CPMAddPackage("gh:yosh-matsuda/field-reflection@0.2.1")
 
 #CPMAddPackage("gh:fmtlib/fmt#11.2.0") # is added by spdlog

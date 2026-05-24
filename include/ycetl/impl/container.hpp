@@ -31,8 +31,8 @@ struct container_traits<ContainerTemplate, type_set<LeadingArgs...>,
                         BackendMode, Memory>
     : public ycetl::template_info<ContainerTemplate, LeadingArgs...,
                                   BackendMode, Memory> {
-  static_assert(!std::is_same_v<Memory, by_value> &&
-                    !std::is_same_v<Memory, by_reference>,
+  static_assert(!std::is_same_v<Memory, by_value>
+                    && !std::is_same_v<Memory, by_reference>,
                 "container_traits: Memory and BackendMode template args appear "
                 "swapped -- expected order is "
                 "<ContainerTemplate, type_set<...>, BackendMode, Memory>.");

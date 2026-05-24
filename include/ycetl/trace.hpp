@@ -62,8 +62,8 @@ template <typename T> constexpr void pack(char *buffer, const T &value) {
 using ConstructorFn = void *(*)(char *);
 
 template <typename T> constexpr std::size_t get_serialized_size(const T &v) {
-  return safe_sizeof<T>() +
-         safe_sizeof<std::size_t>(); /* for the constructor index */
+  return safe_sizeof<T>()
+       + safe_sizeof<std::size_t>(); /* for the constructor index */
 }
 
 template <typename... Args>
@@ -99,8 +99,8 @@ public:
 
   template <typename... Args> constexpr void pack(Args &&...args) {
 
-    _size = get_serialized_size(args...) + sizeof(TraceMessageHeader) +
-            sizeof(std::size_t);
+    _size = get_serialized_size(args...) + sizeof(TraceMessageHeader)
+          + sizeof(std::size_t);
     if (_size == 0) {
       throw std::runtime_error("Cannot create TraceMessage with zero size");
       return; // nothing to do

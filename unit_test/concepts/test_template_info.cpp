@@ -148,8 +148,8 @@ static_assert(!is_template_rebindable_v<int>,
               "int should NOT be template rebindable");
 
 template <typename T>
-inline constexpr bool has_rebindable_memory_v =
-    is_template_rebindable_v<T> && has_memory_type_v<T>;
+inline constexpr bool has_rebindable_memory_v = is_template_rebindable_v<T>
+                                             && has_memory_type_v<T>;
 
 template <typename... Args>
 struct Rebindable : template_info<Rebindable, Args...> {};

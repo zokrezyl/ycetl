@@ -14,12 +14,17 @@ how multitype memory dodges `void*`, how compile-time data ends up in `.rodata`
 
 ### Containers (built on the `dynamic_array` foundation)
 
-| Sequence            | Associative (ordered)    | Associative (hashed)              | View / adapter    |
-| ------------------- | ------------------------ | --------------------------------- | ----------------- |
-| `dynamic_array<T>`  | `set<K>`                 | `unordered_set<K>`                | `span<T>`         |
-| `vector<T>` *(WIP)* | `map<K,V>`               | `unordered_map<K,V>`              | `stack<T>`        |
-| `array<T,N>`        | `multiset<K>`            | `unordered_multiset<K>`           | `priority_queue<T>` |
-| `bitset<N>`         | `multimap<K,V>`          | `unordered_multimap<K,V>`         |                   |
+| Sequence            | Associative (ordered)    | Associative (hashed)              | View / adapter      |
+| ------------------- | ------------------------ | --------------------------------- | ------------------- |
+| `dynamic_array<T>`  | `set<K>`                 | `unordered_set<K>`                | `span<T>`           |
+| `vector<T>`         | `map<K,V>`               | `unordered_map<K,V>`              | `stack<T>`          |
+| `array<T,N>`        | `multiset<K>`            | `unordered_multiset<K>`           | `queue<T>`          |
+| `list<T>`           | `multimap<K,V>`          | `unordered_multimap<K,V>`         | `priority_queue<T>` |
+| `forward_list<T>`   |                          |                                   |                     |
+| `deque<T>`          |                          |                                   |                     |
+| `basic_string<C>`   |                          |                                   |                     |
+| `bitset<N>`         |                          |                                   |                     |
+| `hive<T>`           |                          |                                   |                     |
 
 Every container works under `static_assert` inside a constexpr lambda **and**
 at runtime — see the `test_*.cpp` files for the canonical patterns.

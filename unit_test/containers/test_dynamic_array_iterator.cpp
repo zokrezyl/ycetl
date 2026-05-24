@@ -96,8 +96,8 @@ suite dynamic_array_suite = [] {
       arr[0] = 10;
       arr[1] = 20;
       auto it = arr.begin();
-      bool val_before =
-          (*(it++) == 10); // it_orig holds original, it is incremented
+      bool val_before = (*(it++)
+                         == 10); // it_orig holds original, it is incremented
       bool val_after = (*it == 20);
       return val_before && val_after;
     };

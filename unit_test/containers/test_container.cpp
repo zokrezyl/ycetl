@@ -81,12 +81,11 @@ suite container_traits_suite = [] {
           my_basic_string, type_set<char, std::char_traits<char>>,
           container::by_reference, default_memory<char>>;
 
-      return std::is_same_v<string_traits::value_type, char> &&
-             std::is_same_v<string_traits::backend_type_raw,
-                            dynamic_array<char>> &&
-             std::is_same_v<string_traits::backend_type,
-                            dynamic_array<char> &> &&
-             std::is_same_v<string_traits::memory_type, default_memory<char>>;
+      return std::is_same_v<string_traits::value_type, char>
+          && std::is_same_v<string_traits::backend_type_raw,
+                            dynamic_array<char>>
+          && std::is_same_v<string_traits::backend_type, dynamic_array<char> &>
+          && std::is_same_v<string_traits::memory_type, default_memory<char>>;
     };
     static_assert(test());
     expect(test());
@@ -100,8 +99,8 @@ suite container_traits_suite = [] {
                                       container::by_value, default_memory<int>>;
 
       return std::is_same_v<traits::value_type,
-                            memory_rebindable_type<default_memory<int>>> &&
-             ycetl::has_rebindable_memory_v<memory_rebindable_type<void>>;
+                            memory_rebindable_type<default_memory<int>>>
+          && ycetl::has_rebindable_memory_v<memory_rebindable_type<void>>;
     };
     static_assert(test());
     expect(test());

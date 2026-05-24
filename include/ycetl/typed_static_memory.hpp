@@ -76,8 +76,8 @@ public:
   }
 
   constexpr difference_type operator-(const pointer &other) const {
-    return static_cast<difference_type>(_offset) -
-           static_cast<difference_type>(other._offset);
+    return static_cast<difference_type>(_offset)
+         - static_cast<difference_type>(other._offset);
   }
 
   constexpr pointer &operator++() {
@@ -143,8 +143,8 @@ public:
     return _backend._capacity - _offset;
   }
   constexpr std::size_t allocated_size() const noexcept {
-    return _offset -
-           1; // _offset starts at 1, so we subtract 1 to get the actual size
+    return _offset
+         - 1; // _offset starts at 1, so we subtract 1 to get the actual size
   }
 
   constexpr typed_static_memory() noexcept : _backend{} {}

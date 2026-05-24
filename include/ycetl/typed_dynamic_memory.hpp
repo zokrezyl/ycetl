@@ -76,8 +76,8 @@ public:
     } else {
       if (_array_slots_taken >= _current_array_vector_size) {
         // Resize the array allocation vector
-        std::size_t new_size =
-            _current_array_vector_size * _vector_growth_factor;
+        std::size_t new_size = _current_array_vector_size
+                             * _vector_growth_factor;
         size_and_pointer<stored_type> *new_vector =
             new size_and_pointer<stored_type>[new_size];
         for (std::size_t i = 0; i < _current_array_vector_size; ++i) {

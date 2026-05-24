@@ -22,8 +22,8 @@ suite multitype_handler_downgrade_suite = [] {
           large_handler);
 
       // Check explicitly that handlers were correctly picked
-      return smaller_handler.get_handler<int>().value() == sizeof(int) &&
-             smaller_handler.get_handler<char>().value() == sizeof(char);
+      return smaller_handler.get_handler<int>().value() == sizeof(int)
+          && smaller_handler.get_handler<char>().value() == sizeof(char);
     };
 
     static_assert(test());

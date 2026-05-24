@@ -289,8 +289,8 @@ What's currently implemented:
 
 | Category            | Containers                                                       |
 | ------------------- | ---------------------------------------------------------------- |
-| Sequence            | `dynamic_array`, `array`, `bitset`                               |
-| View / adapter      | `span`, `stack`, `priority_queue`                                |
+| Sequence            | `dynamic_array`, `array`, `vector`, `list`, `forward_list`, `deque`, `basic_string`, `bitset`, `hive` |
+| View / adapter      | `span`, `stack`, `queue`, `priority_queue`                       |
 | Ordered associative | `set`, `map`, `multiset`, `multimap`                             |
 | Hashed associative  | `unordered_set`, `unordered_map`, `unordered_multiset`, `unordered_multimap` |
 | Smart pointers      | `unique_ptr`, `shared_ptr`, `weak_ptr`, `trivial_shared_ptr`     |
@@ -299,10 +299,6 @@ Hash containers use `ycetl::hash<T>` by default (not `std::hash<T>` —
 libstdc++ leaves `std::hash<int>::operator()` non-constexpr, which
 would block any compile-time use). `ycetl::hash<T>` provides Wang's
 mix64 for integral types + pointers and FNV-1a for `string_view`.
-
-`vector`, `list`, and `basic_string` headers exist but are pinned to
-an earlier `container::container<>` glue that isn't yet wired up; their
-tests are gated off in CMake. Don't use them as-is.
 
 ## Runtime use
 
