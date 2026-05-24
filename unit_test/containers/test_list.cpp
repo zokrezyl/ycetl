@@ -1,100 +1,91 @@
 #include <boost/ut.hpp>
-#include <ycetl/impl/dynamic_allocator.hpp>
 #include <ycetl/list.hpp>
-#include <ycetl/memory.hpp>
 
 using namespace boost::ut;
-using namespae ycetl;
-
-struct Test {
-  int value;
-  constexpr Test(int v = 0) : value(v) {}
-};
+using namespace ycetl;
 
 suite list_suite = [] {
-  "empty_list"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> l(allocator);
-      return l.empty() && l.size() == 0_u;
+    "push_back_and_iterate"_test = [] {
+        constexpr auto t = [] {
+            list<int> l;
+            for (int i = 1; i <= 5; ++i) l.push_back(i);
+            int sum = 0;
+            for (auto v : l) sum += v;
+            return l.size() == 5 && sum == 15 && l.front() == 1 && l.back() == 5;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "list_with_values"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> l({1, 2, 3}, allocator);
-      return l.size() == 3_u && l.front() == 1_i && l.back() == 3_i;
+    "push_front_reverses_order"_test = [] {
+        constexpr auto t = [] {
+            list<int> l;
+            for (int i = 1; i <= 4; ++i) l.push_front(i);  // 4, 3, 2, 1
+            return l.front() == 4 && l.back() == 1 && l.size() == 4;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "push_back_and_front"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> l(allocator);
-      l.push_back(10);
-      l.push_front(5);
-      return l.size() == 2_u && l.front() == 5_i && l.back() == 10_i;
+    "bidirectional_iteration"_test = [] {
+        constexpr auto t = [] {
+            list<int> l{10, 20, 30, 40};
+            auto it = l.end();
+            --it;
+            bool ok = *it == 40;
+            --it; ok = ok && *it == 30;
+            --it; ok = ok && *it == 20;
+            return ok;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "emplace_back"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<Test>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<Test, allocator_t> l(allocator);
-      l.emplace_back(42);
-      return l.size() == 1_u && l.back().value == 42_i;
+    "insert_in_middle"_test = [] {
+        constexpr auto t = [] {
+            list<int> l{1, 2, 4, 5};
+            auto it = l.begin(); ++it; ++it;            // points at 4
+            l.insert(it, 3);
+            int prev = 0;
+            for (auto v : l) { if (v != prev + 1) return false; prev = v; }
+            return prev == 5 && l.size() == 5;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "copy_construct"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> a({1, 2, 3}, allocator);
-      list<int, allocator_t> b = a;
-      return b.size() == 3_u && b.front() == 1_i && b.back() == 3_i;
+    "erase_returns_next"_test = [] {
+        constexpr auto t = [] {
+            list<int> l{1, 2, 3, 4};
+            auto it = l.begin(); ++it;                  // points at 2
+            it = l.erase(it);
+            return *it == 3 && l.size() == 3 && l.front() == 1 && l.back() == 4;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "move_construct"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> a({7, 8}, allocator);
-      list<int, allocator_t> b = std::move(a);
-      return b.size() == 2_u && b.front() == 7_i && b.back() == 8_i;
+    "pop_front_pop_back"_test = [] {
+        constexpr auto t = [] {
+            list<int> l{1, 2, 3};
+            l.pop_front();
+            l.pop_back();
+            return l.size() == 1 && l.front() == 2 && l.back() == 2;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 
-  "clear_and_reuse"_test = [] {
-    constexpr auto test = [] {
-      using relevant_types = relevant_types_t<list<int>>;
-      using allocator_t = default_allocator<relevant_types>;
-      allocator_t allocator;
-      list<int, allocator_t> l({1, 2}, allocator);
-      l.clear();
-      l.push_back(42);
-      return l.size() == 1_u && l.front() == 42_i;
+    "copy_then_mutate_independently"_test = [] {
+        constexpr auto t = [] {
+            list<int> a{1, 2, 3};
+            list<int> b = a;
+            b.push_back(4);
+            return a.size() == 3 && b.size() == 4 && a.back() == 3 && b.back() == 4;
+        };
+        static_assert(t());
+        expect(t());
     };
-    expect(test());
-  };
 };
 
-int main(int argc, char **argv) { return 0; }
+int main() {}

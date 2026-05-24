@@ -1,109 +1,84 @@
 #include <boost/ut.hpp>
+#include <string_view>
 #include <ycetl/basic_string.hpp>
-#include <ycetl/memory.hpp>
 #include <ycetl/string.hpp>
-#include <ycetl/typed_dynamic_memory.hpp>
 
 using namespace boost::ut;
 using namespace ycetl;
 
-suite basic_string_suite_no_explicit_memory = [] {
-  "empty_basic_string_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> s;
-      return s.empty() && s.size() == 0_u;
+suite basic_string_suite = [] {
+    "default_ctor_empty"_test = [] {
+        constexpr auto t = [] {
+            string s;
+            return s.empty() && s.size() == 0;
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "construct_from_literal_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> s("hello");
-      return s.size() == 5_u && s[0] == 'h' && s[4] == 'o';
+    "construct_from_literal"_test = [] {
+        constexpr auto t = [] {
+            string s = "hello";
+            return s.size() == 5 && s[0] == 'h' && s.back() == 'o';
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "push_back_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> s;
-      s.push_back('x');
-      s.push_back('y');
-      return s.size() == 2_u && s[0] == 'x' && s[1] == 'y';
+    "append_and_concat"_test = [] {
+        constexpr auto t = [] {
+            string s = "hello";
+            s += ", ";
+            s += "world";
+            return s.size() == 12 && s.view() == std::string_view("hello, world");
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "copy_construct_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> a("abc");
-      basic_string<char> b = a;
-      return b.size() == 3_u && b[0] == 'a' && b[2] == 'c';
+    "find_substring"_test = [] {
+        constexpr auto t = [] {
+            string s = "the quick brown fox";
+            return s.find('q')                    == 4
+                && s.find(std::string_view("fox")) == 16
+                && s.find(std::string_view("cat")) == string::npos
+                && s.find('x', 17)                == 18;
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "move_construct_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> a("xy");
-      basic_string<char> b = std::move(a);
-      return b.size() == 2_u && b[0] == 'x' && b[1] == 'y';
+    "substr"_test = [] {
+        constexpr auto t = [] {
+            string s = "abcdef";
+            auto mid = s.substr(2, 3);                // "cde"
+            return mid.size() == 3 && mid.view() == std::string_view("cde");
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "clear_and_reuse_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> s("test");
-      s.clear();
-      s.push_back('z');
-      return s.size() == 1_u && s[0] == 'z';
+    "iteration"_test = [] {
+        constexpr auto t = [] {
+            string s = "abc";
+            int seen = 0;
+            for (auto c : s) seen = seen * 256 + c;
+            return seen == ('a' * 256 + 'b') * 256 + 'c';
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
 
-  "initializer_list_default_memory"_test = [] {
-    constexpr auto test = [] {
-      basic_string<char> s({'a', 'b', 'c'});
-      return s.size() == 3_u && s[1] == 'b';
+    "equality"_test = [] {
+        constexpr auto t = [] {
+            string a = "test";
+            string b = "test";
+            string c = "tess";
+            return (a == b) && !(a == c) && a == std::string_view("test");
+        };
+        static_assert(t());
+        expect(t());
     };
-    static_assert(test());
-    expect(test());
-  };
-  "return_to_runtime"_test = [] {
-    constexpr auto test = [] {
-      using string_t = static_t<basic_string<char>>;
-      // string_t s({'a', 'b', 'c'});
-      string_t s;
-      s.reserve(3);
-      // return s.size() == 3_u && s[1] == 'b';
-      //
-      static_assert(std::is_same_v<typename string_t::value_type, char>);
-      static_assert(has_rebindable_memory_v<string_t>);
-
-      static_assert(std::is_same_v<typename string_t::value_type, char>);
-      static_assert(has_rebindable_memory_v<string_t>);
-      static_assert(
-          std::is_same_v<typename string_t::memory_type,
-                         static_memory<relevant_types_t<basic_string<char>>>>);
-      static_assert(std::is_same_v<typename string_t::traits_type,
-                                   std::char_traits<char>>);
-      //
-      //
-      return s;
-      // return true; // Placeholder to avoid unused variable warning
-    };
-    constexpr auto s = test();
-    // static_assert(s.size() == 3);
-    //  static_assert(test());
-    //  expect(test());
-  };
 };
 
-int main(int argc, char **argv) { return 0; }
+int main() {}

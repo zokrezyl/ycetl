@@ -1,273 +1,104 @@
 #pragma once
 
-#include <compare>
 #include <cstddef>
 #include <initializer_list>
-#include <iterator>
-#include <type_traits>
 #include <utility>
 
-#include <ycetl/impl/container.hpp>
+#include <ycetl/dynamic_array.hpp>
 #include <ycetl/memory.hpp>
 
 namespace ycetl {
 
-template <typename T, typename BackendMode, typename Memory> class vector;
-;
-
-template <typename T, typename BackendMode = container::by_value,
-          typename Memory =
-              typename container::container_traits<vector, T>::default_memory>
-class vector;
-
-/* detect nested vector --------------------------------------------------- */
-template <class> struct is_vector : std::false_type {};
-template <class U, class A> struct is_vector<vector<U, A>> : std::true_type {};
-
-template <typename Traits, typename T, typename Memory, bool Const>
-class vector_iterator {
-public:
-  using view_type = typename Traits::view_type;
-
-  using iterator_category = std::random_access_iterator_tag;
-  using storage_unit = backend_type_of_t<T>;
-  using raw = std::conditional_t<Const, const storage_unit *, storage_unit *>;
-
-  using value_type = T;
-  using difference_type = std::ptrdiff_t;
-  using pointer = value_type *;
-  using reference = value_type;
-
-private:
-  raw _ptr = nullptr;
-  Memory _memory;
-
-public:
-  constexpr vector_iterator() = default;
-  constexpr vector_iterator(raw p, Memory mem) : _ptr(p), _memory(mem) {}
-
-  constexpr reference operator*() const {
-    if constexpr (is_vector<T>::value)
-      return view_type(_memory, const_cast<storage_unit &>(*_ptr));
-    else
-      return *_ptr;
-  }
-
-  // Minimal operations for random-access iterator:
-  constexpr vector_iterator &operator++() {
-    ++_ptr;
-    return *this;
-  }
-  constexpr vector_iterator operator++(int) {
-    auto tmp = *this;
-    ++_ptr;
-    return tmp;
-  }
-  constexpr vector_iterator &operator--() {
-    --_ptr;
-    return *this;
-  }
-  constexpr vector_iterator operator--(int) {
-    auto tmp = *this;
-    --_ptr;
-    return tmp;
-  }
-  constexpr vector_iterator &operator+=(difference_type n) {
-    _ptr += n;
-    return *this;
-  }
-  constexpr vector_iterator &operator-=(difference_type n) {
-    _ptr -= n;
-    return *this;
-  }
-
-  constexpr reference operator[](difference_type n) const {
-    return *(*this + n);
-  }
-
-  friend constexpr vector_iterator operator+(vector_iterator it,
-                                             difference_type n) {
-    it += n;
-    return it;
-  }
-  friend constexpr vector_iterator operator-(vector_iterator it,
-                                             difference_type n) {
-    it -= n;
-    return it;
-  }
-  friend constexpr difference_type operator-(vector_iterator l,
-                                             vector_iterator r) {
-    return l._ptr - r._ptr;
-  }
-
-  friend constexpr bool operator==(vector_iterator l, vector_iterator r) {
-    return l._ptr == r._ptr;
-  }
-  friend constexpr auto operator<=>(vector_iterator l, vector_iterator r) {
-    return l._ptr <=> r._ptr;
-  }
-};
-
-/*──────────────────────────── vector ─────────────────────────────────────*/
-// clang-format off
-template <typename T, 
-  typename BackendMode,
-  typename Memory>
+// ycetl::vector is a thin wrapper around ycetl::dynamic_array — the
+// proven sequence backbone every other container in this library is
+// built on. It exists so `#include <ycetl/vector.hpp>` does the obvious
+// thing, and to surface a few std::vector-shaped niceties
+// (front/back/data() const, equality, default-constructible without an
+// explicit Memory argument) that dynamic_array doesn't expose directly.
+//
+// The previous vector.hpp template-on-container_traits design never
+// compiled in tree; replaced wholesale.
+template <typename T, typename TypedMemory = typed_dynamic_memory<T>>
 class vector {
-  // clang-format on
 public:
-  using traits = container::container_traits<vector, T, Memory>;
-
-  using backend_type = typename traits::backend_type;
-  using storage_unit = typename traits::storage_unit;
-  using relevant_of = typename traits::relevant_of;
-  using memory_type = typename traits::memory_type;
-  using value_type = typename traits::value_type;
-  using view_type = typename traits::view_type;
-
-  using reference = typename traits::reference;
-  using const_reference = typename traits::const_reference;
-  using pointer = typename traits::pointer;
-  using const_pointer = typename traits::const_pointer;
-  using size_type = typename traits::size_type;
-  using difference_type = typename traits::difference_type;
-
-  using iterator = vector_iterator<traits, value_type, memory_type, false>;
-  using const_iterator = vector_iterator<traits, value_type, memory_type, true>;
+    using storage_type    = dynamic_array<T, TypedMemory>;
+    using value_type      = T;
+    using size_type       = typename storage_type::size_type;
+    using difference_type = typename storage_type::difference_type;
+    using reference       = T &;
+    using const_reference = const T &;
+    using iterator        = typename storage_type::iterator;
+    using const_iterator  = typename storage_type::const_iterator;
 
 private:
-  memory_type _memory;
-  backend_type _backend;
+    storage_type _data;
 
 public:
-  // special constructor mainly used for nested containers
-  // the inner container will get a  downgraded multitype memory
-  template <typename OtherMemory>
-  constexpr vector(backend_type backend, OtherMemory other_memory)
-      : _memory(other_memory), _backend(backend) {}
+    constexpr vector() = default;
 
-  template <class, class, class> friend class vector;
+    template <typename Memory>
+    explicit constexpr vector(Memory &m) : _data(m) {}
 
-  /* constructors (unchanged bodies, but _backend calls stay correct) */
-  constexpr vector() : _memory(), _backend() {}
-  explicit constexpr vector(memory_type mem) : _memory(mem), _backend() {}
+    template <typename Memory>
+    constexpr vector(Memory &m, size_type n) : _data(m, n) {}
 
-  constexpr vector(size_type n, const T &v)
-      : _memory(), _backend(_memory, n, v) {}
-  constexpr vector(size_type n, const T &v, memory_type mem)
-      : _memory(mem), _backend(_memory, n, v) {}
-  explicit constexpr vector(size_type n) : _memory(), _backend(_memory, n) {}
-  constexpr vector(size_type n, memory_type mem)
-      : _memory(mem), _backend(_memory, n) {}
+    template <typename Memory>
+    constexpr vector(Memory &m, size_type n, const T &v) : _data(m, n, v) {}
 
-  constexpr vector(std::initializer_list<T> il)
-      : _memory(), _backend(_memory, il) {}
-  constexpr vector(std::initializer_list<T> il, memory_type mem)
-      : _memory(mem), _backend(_memory, il) {}
+    template <typename Memory>
+    constexpr vector(Memory &m, std::initializer_list<T> il) : _data(m, il) {}
 
-  template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>>
-  constexpr vector(It f, It l)
-      : _memory(),
-        _backend(_memory, f, static_cast<size_type>(std::distance(f, l))) {}
-  template <class It, typename = std::enable_if_t<!std::is_integral_v<It>>,
-            typename = void>
-  constexpr vector(It f, It l, memory_type mem)
-      : _memory(mem),
-        _backend(_memory, f, static_cast<size_type>(std::distance(f, l))) {}
+    // size / capacity
+    constexpr size_type size()     const noexcept { return _data.size(); }
+    constexpr size_type capacity() const noexcept { return _data.capacity(); }
+    constexpr bool      empty()    const noexcept { return _data.size() == 0; }
 
-  constexpr vector(const vector &o)
-      : _memory(o._memory), _backend(_memory, o._backend) {}
+    constexpr void reserve(size_type n)              { _data.reserve(n); }
+    constexpr void resize(size_type n)               { _data.resize(n); }
+    constexpr void resize(size_type n, const T &v)   { _data.resize(n, v); }
+    constexpr void clear()                            { _data.clear(); }
 
-  constexpr vector(const vector &o, memory_type mem)
-      : _memory(mem), _backend(_memory, *o._backend) {}
+    // element access
+    constexpr reference       operator[](size_type i)       { return _data[i]; }
+    constexpr const_reference operator[](size_type i) const { return _data[i]; }
+    constexpr reference       front()       { return _data[0]; }
+    constexpr const_reference front() const { return _data[0]; }
+    constexpr reference       back()        { return _data[_data.size() - 1]; }
+    constexpr const_reference back()  const { return _data[_data.size() - 1]; }
 
-  constexpr vector(vector &&o) noexcept
-      : _memory(std::move(o._memory)), _backend(std::move(o._backend)) {}
+    constexpr auto data()       noexcept { return _data.begin(); }
+    constexpr auto data() const noexcept { return _data.begin(); }
 
-  constexpr vector(vector &&o, memory_type mem) : _memory(mem), _backend() {
-    reserve(o.size());
-    for (auto &e : *o._backend)
-      _backend.push_back(_memory, std::move(e));
-    o.clear();
-  }
+    // modifiers
+    constexpr void push_back(const T &v) { _data.push_back(v); }
+    constexpr void push_back(T &&v)      { _data.push_back(std::move(v)); }
 
-  constexpr ~vector() = default;
-
-  /* capacity ----------------------------------------------------------- */
-  constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _backend.size(); }
-  constexpr size_type capacity() const noexcept { return _backend.capacity(); }
-
-  constexpr void reserve(size_type n) { _backend.reserve(_memory, n); }
-  constexpr void resize(size_type n) { _backend.resize(_memory, n); }
-  constexpr void clear() { _backend.clear(); }
-
-  /* element access ----------------------------------------------------- */
-  constexpr auto operator[](size_type i) {
-    if constexpr (is_vector<T>::value)
-      return view_type(_backend[i], _memory);
-    else
-      return _backend[i];
-  }
-
-  constexpr const auto operator[](size_type i) const {
-    if constexpr (is_vector<T>::value)
-      return view_type(_backend[i], _memory);
-    else
-      return _backend[i];
-  }
-
-  /* modifiers ---------------------------------------------------------- */
-  constexpr void push_back(const T &v) {
-    if constexpr (is_vector<T>::value)
-      // the first _memory is for the vector itself, the second for the
-      // back-end
-      _backend.emplace_back(_memory, _memory, *v._backend); // copy back‑end
-    else
-      _backend.push_back(_memory, v);
-  }
-  constexpr void push_back(T &&v) {
-    if constexpr (is_vector<T>::value)
-      _backend.emplace_back(_memory, std::move(*v._backend)); // move back‑end
-    else
-      _backend.push_back(_memory, std::move(v));
-  }
-
-  /*
-  template <class... Args> constexpr T &emplace_back(Args &&...args) {
-    return *_backend.emplace_back(_memory, std::forward<Args>(args)...);
-  }
-  */
-  template <class... Args> constexpr auto emplace_back(Args &&...args) {
-    if constexpr (is_vector<T>::value) {
-      auto &inner_ref =
-          *_backend.emplace_back(_memory, std::forward<Args>(args)...);
-      return value_type(inner_ref, _memory);
-    } else {
-      return (*_backend.emplace_back(_memory, std::forward<Args>(args)...));
+    template <typename... Args>
+    constexpr reference emplace_back(Args &&...args) {
+        return _data.emplace_back(std::forward<Args>(args)...);
     }
-  }
 
-  constexpr iterator insert(iterator pos, const T &val) {
-    size_type idx = pos - begin();
-    if constexpr (is_vector<T>::value)
-      _backend.insert(_memory, _backend.begin() + idx, *val._backend);
-    else
-      _backend.insert(_memory, _backend.begin() + idx, val);
-    return iterator(_backend.begin() + idx, _memory);
-  }
+    constexpr void pop_back() { _data.pop_back(); }
 
-  constexpr void pop_back() { _backend.pop_back(); }
+    constexpr iterator insert(iterator pos, const T &v) { return _data.insert(pos, v); }
+    constexpr iterator insert(iterator pos, T &&v)      { return _data.insert(pos, std::move(v)); }
 
-  /* iterators ---------------------------------------------------------- */
-  constexpr iterator begin() noexcept { return {_backend.begin(), _memory}; }
-  constexpr iterator end() noexcept { return {_backend.end(), _memory}; }
-  constexpr const_iterator begin() const noexcept {
-    return {_backend.begin(), _memory};
-  }
-  constexpr const_iterator end() const noexcept {
-    return {_backend.end(), _memory};
-  }
+    // iterators
+    constexpr iterator       begin()       noexcept { return _data.begin(); }
+    constexpr iterator       end()         noexcept { return _data.end(); }
+    constexpr const_iterator begin() const noexcept { return _data.begin(); }
+    constexpr const_iterator end()   const noexcept { return _data.end(); }
+
+    // direct storage handle for callers that want the dynamic_array API
+    constexpr storage_type       &storage()       noexcept { return _data; }
+    constexpr const storage_type &storage() const noexcept { return _data; }
+
+    constexpr bool operator==(const vector &o) const {
+        if (_data.size() != o._data.size()) return false;
+        for (size_type i = 0; i < _data.size(); ++i)
+            if (_data[i] != o._data[i]) return false;
+        return true;
+    }
 };
 
 } // namespace ycetl

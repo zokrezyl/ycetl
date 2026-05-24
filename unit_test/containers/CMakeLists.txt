@@ -68,16 +68,12 @@ create_test_executable(test_multimap)
 create_test_executable(test_unordered_multiset)
 create_test_executable(test_unordered_multimap)
 
-# These are pinned to the old container::container<>-based design and
-# never compiled. Leave gated until either the underlying glue is
-# fixed/dropped or the tests are rewritten to the dynamic_array-backed
-# successor implementations (as test_set / test_unordered_map already
-# were).
-if(FALSE)
-  create_test_executable(test_basic_string)
-  create_test_executable(test_basic_string_with_static_memory)
-  create_test_executable(test_basic_string_return)
-  create_test_executable(test_basic_string_with_memory)
-  create_test_executable(test_list)
-  create_test_executable(test_vector)
-endif()
+# vector / list / basic_string / forward_list / deque / queue —
+# rewritten on the dynamic_array foundation, now active.
+create_test_executable(test_vector)
+create_test_executable(test_list)
+create_test_executable(test_forward_list)
+create_test_executable(test_basic_string)
+create_test_executable(test_deque)
+create_test_executable(test_queue)
+create_test_executable(test_hive)

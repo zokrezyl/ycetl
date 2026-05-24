@@ -4,22 +4,9 @@
 
 namespace ycetl {
 
-#if 0
-template <typename Memory =
-              typename container::container_traits<char>::default_memory>
-class string : public basic_string<char, std::char_traits<char>, Memory> {
-  using basic_string<char, std::char_traits<char>, Memory>::basic_string;
-  using relevant_of =
-      typename basic_string<char, std::char_traits<char>, Memory>::relevant_of;
-};
-#else
-template <
-    typename Memory = typename container::container_traits<
-        basic_string, type_set<char, std::char_traits<char>>>::default_memory>
-
-using string = ycetl::basic_string<char, std::char_traits<char>,
-                                   container::by_value, Memory>;
-
-#endif
+// Convenience alias matching std::string. basic_string's Traits
+// parameter is kept for API parity but unused — the canonical default
+// is fine.
+using string = basic_string<char>;
 
 } // namespace ycetl

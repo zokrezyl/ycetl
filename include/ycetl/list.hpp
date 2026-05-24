@@ -2,130 +2,220 @@
 
 #include <cstddef>
 #include <initializer_list>
-#include <iterator>
+#include <type_traits>
 #include <utility>
-#include <ycetl/impl/container.hpp>
-#include <ycetl/memory.hpp>
 
 namespace ycetl {
 
-/*─────────────────────────────── list ──────────────────────────────────*/
-// clang-format off
-template <typename T,
-          typename Allocator = typename container::container<T>::default_allocator>
-// clang-format on
-class list : public container::container<T, Allocator> {
-public:
-  using base_type = container::container<T, Allocator>;
-  using typename base_type::relevant_of;
-  using typename base_type::storage_type;
-  using typename base_type::storage_unit;
-  using allocator_type = Allocator;
-
-  using value_type = T;
-  using size_type = std::size_t;
-  using iterator = storage_unit *;
-  using const_iterator = const storage_unit *;
-
+// Doubly-linked list. Nodes are heap-allocated with new/delete — same
+// constexpr discipline as ycetl::unique_ptr / shared_ptr (allocate and
+// deallocate must balance inside one constant evaluation).
+//
+// Stable iterators (push_back/push_front/insert/erase don't invalidate
+// iterators to other elements), bidirectional iteration. No allocator
+// parameter — the per-node lifetime is too small to be worth wiring
+// into a multitype memory backend; if you need bulk-typed allocation,
+// reach for ycetl::dynamic_array instead.
+//
+// Replaces the earlier container::container<>-based skeleton in this
+// file, which never compiled in tree.
+template <typename T> class list {
 private:
-  Memory _memory;
-  storage_type _storage;
+    struct node {
+        T     value;
+        node *prev;
+        node *next;
+
+        template <typename... Args>
+        constexpr node(node *p, node *n, Args &&...args)
+            : value(std::forward<Args>(args)...), prev(p), next(n) {}
+    };
+
+    node     *_head = nullptr;
+    node     *_tail = nullptr;
+    std::size_t _size = 0;
+
+    constexpr void link_after(node *prev, node *fresh) {
+        node *next = prev ? prev->next : _head;
+        fresh->prev = prev;
+        fresh->next = next;
+        if (prev) prev->next = fresh; else _head = fresh;
+        if (next) next->prev = fresh; else _tail = fresh;
+    }
+
+    constexpr void unlink(node *n) {
+        if (n->prev) n->prev->next = n->next; else _head = n->next;
+        if (n->next) n->next->prev = n->prev; else _tail = n->prev;
+    }
+
+    constexpr void clear_nodes() {
+        node *cur = _head;
+        while (cur) {
+            node *nx = cur->next;
+            delete cur;
+            cur = nx;
+        }
+        _head = _tail = nullptr;
+        _size = 0;
+    }
 
 public:
-  // Internal constructor
-  constexpr list(storage_type &storage, Allocator &alloc)
-      : _alloc_ptr(&alloc), _storage(&storage) {}
+    using value_type = T;
+    using size_type  = std::size_t;
 
-  constexpr Allocator &alloc() { return *_alloc_ptr; }
-  constexpr const Allocator &alloc() const { return *_alloc_ptr; }
+    // Bidirectional iterator. Const-ness applies to what *it returns,
+    // not to the iterator's position state — same shape we settled on
+    // for dynamic_array's basic_iterator.
+    template <bool IsConst> class basic_iter {
+        friend class list;
+        using node_pointer = std::conditional_t<IsConst, const node *, node *>;
+        node_pointer _n   = nullptr;
+        // We keep a back-pointer to the owning list so that ++end()
+        // and --begin() don't crash for empty containers, and so that
+        // --end() can land on _tail.
+        using list_pointer = std::conditional_t<IsConst, const list *, list *>;
+        list_pointer _l   = nullptr;
 
-  /* constructors */
-  constexpr list() : _alloc_ptr(), _storage() {}
-  explicit constexpr list(Allocator &a) : _alloc_ptr(&a), _storage() {}
+    public:
+        using value_type      = T;
+        using reference_type  = std::conditional_t<IsConst, const T &, T &>;
+        using pointer_type    = std::conditional_t<IsConst, const T *, T *>;
 
-  constexpr list(size_type n, const T &v)
-      : _alloc_ptr(), _storage(alloc(), n, v) {}
+        constexpr basic_iter() = default;
+        constexpr basic_iter(list_pointer l, node_pointer n) : _n(n), _l(l) {}
 
-  constexpr list(size_type n, const T &v, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), n, v) {}
+        constexpr operator basic_iter<true>() const
+            requires(!IsConst)
+        {
+            basic_iter<true> r;
+            r._n = _n;
+            r._l = _l;
+            return r;
+        }
 
-  explicit constexpr list(size_type n) : _alloc_ptr(), _storage(alloc(), n) {}
+        constexpr reference_type operator*()  const { return _n->value; }
+        constexpr pointer_type   operator->() const { return &_n->value; }
 
-  constexpr list(size_type n, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), n) {}
+        constexpr basic_iter &operator++() { _n = _n->next; return *this; }
+        constexpr basic_iter operator++(int) { auto t = *this; ++(*this); return t; }
+        constexpr basic_iter &operator--() {
+            _n = _n ? _n->prev : _l->_tail;
+            return *this;
+        }
+        constexpr basic_iter operator--(int) { auto t = *this; --(*this); return t; }
 
-  constexpr list(std::initializer_list<T> il)
-      : _alloc_ptr(), _storage(alloc(), il) {}
+        constexpr bool operator==(const basic_iter &o) const { return _n == o._n; }
+        constexpr bool operator!=(const basic_iter &o) const { return _n != o._n; }
+    };
 
-  constexpr list(std::initializer_list<T> il, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), il) {}
+    using iterator       = basic_iter<false>;
+    using const_iterator = basic_iter<true>;
 
-  constexpr list(const list &o)
-      : _alloc_ptr(), _storage(alloc(), *o._storage) {}
+    constexpr list() = default;
 
-  constexpr list(const list &o, Allocator &a)
-      : _alloc_ptr(&a), _storage(alloc(), *o._storage) {}
+    constexpr list(std::initializer_list<T> il) {
+        for (const auto &v : il) push_back(v);
+    }
 
-  constexpr list(list &&o) noexcept
-      : _alloc_ptr(std::move(o._alloc_ptr)), _storage(std::move(o._storage)) {}
+    constexpr list(const list &o) {
+        for (auto it = o.begin(); it != o.end(); ++it) push_back(*it);
+    }
 
-  constexpr list(list &&o, Allocator &a) : _alloc_ptr(&a), _storage() {
-    for (auto &e : *o._storage)
-      push_back(std::move(e));
-    o.clear();
-  }
+    constexpr list(list &&o) noexcept
+        : _head(o._head), _tail(o._tail), _size(o._size)
+    {
+        o._head = o._tail = nullptr;
+        o._size = 0;
+    }
 
-  constexpr ~list() = default;
+    constexpr list &operator=(const list &o) {
+        if (this != &o) {
+            clear_nodes();
+            for (auto it = o.begin(); it != o.end(); ++it) push_back(*it);
+        }
+        return *this;
+    }
 
-  /* capacity ----------------------------------------------------------- */
-  constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _storage->size(); }
+    constexpr list &operator=(list &&o) noexcept {
+        if (this != &o) {
+            clear_nodes();
+            _head = o._head; _tail = o._tail; _size = o._size;
+            o._head = o._tail = nullptr;
+            o._size = 0;
+        }
+        return *this;
+    }
 
-  constexpr void clear() { _storage->clear(); }
+    constexpr ~list() { clear_nodes(); }
 
-  /* modifiers ---------------------------------------------------------- */
-  constexpr void push_back(const T &val) { _storage->push_back(alloc(), val); }
+    constexpr size_type size()  const noexcept { return _size; }
+    constexpr bool      empty() const noexcept { return _size == 0; }
+    constexpr void      clear()                 { clear_nodes(); }
 
-  constexpr void push_back(T &&val) {
-    _storage->push_back(alloc(), std::move(val));
-  }
+    constexpr T       &front()       { return _head->value; }
+    constexpr const T &front() const { return _head->value; }
+    constexpr T       &back()        { return _tail->value; }
+    constexpr const T &back()  const { return _tail->value; }
 
-  template <class... Args> constexpr T &emplace_back(Args &&...args) {
-    return *_storage->emplace_back(alloc(), std::forward<Args>(args)...);
-  }
+    constexpr iterator       begin()       noexcept { return iterator(this, _head); }
+    constexpr iterator       end()         noexcept { return iterator(this, nullptr); }
+    constexpr const_iterator begin() const noexcept { return const_iterator(this, _head); }
+    constexpr const_iterator end()   const noexcept { return const_iterator(this, nullptr); }
 
-  constexpr void pop_back() { _storage->pop_back(); }
+    constexpr void push_back(const T &v) { emplace_back(v); }
+    constexpr void push_back(T &&v)      { emplace_back(std::move(v)); }
 
-  constexpr void push_front(const T &val) {
-    _storage->push_front(alloc(), val);
-  }
+    template <typename... Args>
+    constexpr T &emplace_back(Args &&...args) {
+        node *n = new node(_tail, nullptr, std::forward<Args>(args)...);
+        if (_tail) _tail->next = n; else _head = n;
+        _tail = n;
+        ++_size;
+        return n->value;
+    }
 
-  constexpr void push_front(T &&val) {
-    _storage->push_front(alloc(), std::move(val));
-  }
+    constexpr void push_front(const T &v) { emplace_front(v); }
+    constexpr void push_front(T &&v)      { emplace_front(std::move(v)); }
 
-  template <class... Args> constexpr T &emplace_front(Args &&...args) {
-    return *_storage->emplace_front(alloc(), std::forward<Args>(args)...);
-  }
+    template <typename... Args>
+    constexpr T &emplace_front(Args &&...args) {
+        node *n = new node(nullptr, _head, std::forward<Args>(args)...);
+        if (_head) _head->prev = n; else _tail = n;
+        _head = n;
+        ++_size;
+        return n->value;
+    }
 
-  constexpr void pop_front() { _storage->pop_front(); }
+    constexpr void pop_back() {
+        node *t = _tail;
+        unlink(t);
+        delete t;
+        --_size;
+    }
+    constexpr void pop_front() {
+        node *h = _head;
+        unlink(h);
+        delete h;
+        --_size;
+    }
 
-  /* element access ----------------------------------------------------- */
-  constexpr T &front() noexcept { return _storage->front(); }
-  constexpr const T &front() const noexcept { return _storage->front(); }
+    // Insert before pos. Returns iterator to the new element.
+    constexpr iterator insert(iterator pos, const T &v) {
+        node *prev = pos._n ? pos._n->prev : _tail;
+        node *fresh = new node(nullptr, nullptr, v);
+        link_after(prev, fresh);
+        ++_size;
+        return iterator(this, fresh);
+    }
 
-  constexpr T &back() noexcept { return _storage->back(); }
-  constexpr const T &back() const noexcept { return _storage->back(); }
-
-  /* iterators ---------------------------------------------------------- */
-  constexpr iterator begin() noexcept { return _storage->begin(); }
-  constexpr iterator end() noexcept { return _storage->end(); }
-
-  constexpr const_iterator begin() const noexcept { return _storage->begin(); }
-  constexpr const_iterator end() const noexcept { return _storage->end(); }
-
-  constexpr const_iterator cbegin() const noexcept { return begin(); }
-  constexpr const_iterator cend() const noexcept { return end(); }
+    // Erase pos; returns iterator to the element after.
+    constexpr iterator erase(iterator pos) {
+        node *next = pos._n->next;
+        unlink(pos._n);
+        delete pos._n;
+        --_size;
+        return iterator(this, next);
+    }
 };
 
 } // namespace ycetl

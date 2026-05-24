@@ -2,176 +2,169 @@
 
 #include <cstddef>
 #include <initializer_list>
-#include <iterator>
 #include <string_view>
 #include <utility>
-#include <ycetl/impl/container.hpp>
+
+#include <ycetl/dynamic_array.hpp>
 #include <ycetl/memory.hpp>
 
 namespace ycetl {
 
-template <typename CharT, typename CharTraits, typename BackendMode,
-          typename Memory>
-class basic_string;
-
-// clang-format off
-template <typename CharT, typename CharTraits = std::char_traits<CharT>,
-          typename BackendMode = container::by_value,
-          typename Memory = typename container::container_traits<
-                                basic_string, 
-                                type_set<CharT, CharTraits>>::default_memory>
-class basic_string;
-
-template <typename CharT, 
-          typename CharTraits,
-          typename BackendMode ,
-          typename Memory>
-class basic_string
-    : public container::container<basic_string, CharT, CharTraits, BackendMode, Memory>
-
-{
+// basic_string<CharT>: thin string-shaped wrapper around dynamic_array.
+// Stores the characters contiguously (no null terminator inside the
+// container — c_str() returns a std::string_view, not a const CharT*,
+// to keep the type system honest about there being no trailing NUL).
+//
+// Replaces the previous container::container<>-based skeleton, which
+// never compiled in tree. Char-traits parameter is in the signature
+// for std::basic_string-shaped genericity, but every comparison /
+// search uses the language's built-in operator==/!= so the typical
+// std::char_traits<char> default is invisible to users.
+template <typename CharT,
+          typename Traits     = void,           // kept for API parity, unused
+          typename TypedMemory = typed_dynamic_memory<CharT>>
+class basic_string {
 public:
-  using value_type = CharT;
-  using traits_type = CharTraits;
-  using base_type = container::container<basic_string, CharT, CharTraits,
-                                         BackendMode, Memory>;
-  using traits = typename base_type::traits;
-
-  using storage_unit = typename traits::storage_unit;
-  using backend_type = typename traits::backend_type;
-  using size_type = typename traits::size_type;
-
-  using reference = typename traits::reference;
-  using const_reference = typename traits::const_reference;
-  using pointer = typename traits::pointer;
-  using const_pointer = typename traits::const_pointer;
-
-  using iterator = storage_unit *;
-  using const_iterator = const storage_unit *;
+    using storage_type = dynamic_array<CharT, TypedMemory>;
+    using value_type   = CharT;
+    using size_type    = typename storage_type::size_type;
+    using iterator     = typename storage_type::iterator;
+    using const_iterator = typename storage_type::const_iterator;
 
 private:
-  Memory _memory;
-  backend_type _backend;
+    storage_type _data;
+
+    constexpr void append_raw(const CharT *s, size_type n) {
+        for (size_type i = 0; i < n; ++i) _data.push_back(s[i]);
+    }
+
+    // strlen, constexpr-safe.
+    static constexpr size_type len_of(const CharT *s) {
+        size_type n = 0;
+        while (s[n] != CharT{}) ++n;
+        return n;
+    }
 
 public:
-  // Internal constructor
-  constexpr basic_string(backend_type &backend, Memory &memory)
-      : _memory(memory), _backend(&backend) {}
+    static constexpr size_type npos = static_cast<size_type>(-1);
 
-  /* constructors */
-  constexpr basic_string() : _memory(), _backend() {}
-  explicit constexpr basic_string(Memory &a) : _memory(&a), _backend() {}
+    constexpr basic_string() = default;
 
-  constexpr basic_string(const CharT *s)
-      : _memory(), _backend(_memory, s, CharTraits::length(s)) {}
+    template <typename Memory>
+    explicit constexpr basic_string(Memory &m) : _data(m) {}
 
-  constexpr basic_string(const CharT *s, Memory &a)
-      : _memory(&a), _backend(_memory, s, CharTraits::length(s)) {}
+    template <typename Memory>
+    constexpr basic_string(Memory &m, const CharT *s)
+        : _data(m) { append_raw(s, len_of(s)); }
 
-  constexpr basic_string(std::initializer_list<CharT> il)
-      : _memory(), _backend(_memory, il) {}
+    template <typename Memory>
+    constexpr basic_string(Memory &m, std::basic_string_view<CharT> sv)
+        : _data(m) { append_raw(sv.data(), sv.size()); }
 
-  constexpr basic_string(std::initializer_list<CharT> il, Memory &memory)
-      : _memory(memory), _backend(_memory, il) {}
+    template <typename Memory>
+    constexpr basic_string(Memory &m, std::initializer_list<CharT> il)
+        : _data(m, il) {}
 
-  constexpr basic_string(const basic_string &o)
-      : _memory(), _backend(_memory, o._backend) {}
+    // Default-memory convenience constructors (use the per-T backend
+    // default, no explicit Memory argument).
+    constexpr basic_string(const CharT *s)               { append_raw(s, len_of(s)); }
+    constexpr basic_string(std::basic_string_view<CharT> sv) { append_raw(sv.data(), sv.size()); }
 
-  constexpr basic_string(const basic_string &o, Memory &a)
-      : _memory(&a), _backend(_memory, o._backend) {}
+    // size / capacity
+    constexpr size_type size()     const noexcept { return _data.size(); }
+    constexpr size_type length()   const noexcept { return _data.size(); }
+    constexpr size_type capacity() const noexcept { return _data.capacity(); }
+    constexpr bool      empty()    const noexcept { return _data.size() == 0; }
 
-  constexpr basic_string(basic_string &&o) noexcept
-      : _memory(std::move(o._memory)), _backend(std::move(o._backend)) {}
+    constexpr void reserve(size_type n) { _data.reserve(n); }
+    constexpr void clear()              { _data.clear(); }
 
-  constexpr basic_string(basic_string &&o, Memory &a)
-      : _memory(&a), _backend() {
-    reserve(o.size());
-    for (auto &e : *o._backend)
-      _backend->push_back(_memory, std::move(e));
-    o.clear();
-  }
+    // element access
+    constexpr CharT       &operator[](size_type i)       { return _data[i]; }
+    constexpr const CharT &operator[](size_type i) const { return _data[i]; }
+    constexpr CharT       &front()                       { return _data[0]; }
+    constexpr const CharT &front()                 const { return _data[0]; }
+    constexpr CharT       &back()                        { return _data[_data.size() - 1]; }
+    constexpr const CharT &back()                  const { return _data[_data.size() - 1]; }
 
-  constexpr ~basic_string() = default;
-
-  /* capacity ----------------------------------------------------------- */
-  constexpr bool empty() const noexcept { return size() == 0; }
-  constexpr size_type size() const noexcept { return _backend.size(); }
-  constexpr size_type capacity() const noexcept { return _backend.capacity(); }
-
-  constexpr void reserve(size_type n) { _backend.reserve(_memory, n); }
-  constexpr void resize(size_type n, CharT c = CharT()) {
-    _backend.resize(_memory, n, c);
-  }
-  constexpr void clear() { _backend.clear(); }
-
-  /* element access ----------------------------------------------------- */
-  constexpr reference operator[](size_type i) noexcept { return (_backend)[i]; }
-  constexpr const_reference operator[](size_type i) const noexcept {
-    return (_backend)[i];
-  }
-
-  constexpr reference front() noexcept { return (_backend)[0]; }
-  constexpr const_reference front() const noexcept { return (_backend)[0]; }
-
-  constexpr const_reference back() noexcept { return (_backend)[size() - 1]; }
-  constexpr const_reference back() const noexcept {
-    return (_backend)[size() - 1];
-  }
-
-  /* operator+= overloads ----------------------------------------------- */
-
-  // Append another basic_string
-  constexpr reference operator+=(const basic_string &other) {
-    reserve(size() + other.size());
-    for (const auto &c : other)
-      push_back(c);
-    return *this;
-  }
-
-  // Append C-style string (const CharT*)
-  constexpr reference operator+=(const CharT *s) {
-    size_type len = traits_type::length(s);
-    reserve(size() + len);
-    for (size_type i = 0; i < len; ++i)
-      push_back(s[i]);
-    return *this;
-  }
-
-constexpr basic_string& operator=(const basic_string& other) {
-  if (this != &other) {
-    _backend.clear(_memory);
-    _backend.resize(other._backend.size(), _memory);
-    for (size_type i = 0; i < other._backend.size(); ++i) {
-      _backend[i] = other._backend[i];
+    // No trailing-NUL contract — return a string_view so callers can't
+    // accidentally pass us to a C API expecting null-termination.
+    constexpr std::basic_string_view<CharT> view() const noexcept {
+        if (_data.size() == 0) return {};
+        return std::basic_string_view<CharT>(&_data[0], _data.size());
     }
-  }
-  return *this;
-}
 
-  constexpr const_pointer data() const noexcept { return _backend.data(); }
+    // iterators
+    constexpr iterator       begin()       noexcept { return _data.begin(); }
+    constexpr iterator       end()         noexcept { return _data.end(); }
+    constexpr const_iterator begin() const noexcept { return _data.begin(); }
+    constexpr const_iterator end()   const noexcept { return _data.end(); }
 
-  constexpr std::basic_string_view<CharT, CharTraits> view() const noexcept {
-    return {data(), size()};
-  }
+    // modifiers
+    constexpr void push_back(CharT c) { _data.push_back(c); }
+    constexpr void pop_back()         { _data.pop_back(); }
 
-  /* modifiers ---------------------------------------------------------- */
-  constexpr void push_back(CharT c) { _backend.push_back(_memory, c); }
+    constexpr basic_string &append(const CharT *s, size_type n) {
+        append_raw(s, n);
+        return *this;
+    }
+    constexpr basic_string &append(const CharT *s) {
+        return append(s, len_of(s));
+    }
+    constexpr basic_string &append(std::basic_string_view<CharT> sv) {
+        return append(sv.data(), sv.size());
+    }
+    constexpr basic_string &append(const basic_string &o) {
+        for (size_type i = 0; i < o.size(); ++i) _data.push_back(o[i]);
+        return *this;
+    }
 
-  template <class... Args> constexpr reference emplace_back(Args &&...args) {
-    return _backend.emplace_back(_memory, std::forward<Args>(args)...);
-  }
+    constexpr basic_string &operator+=(CharT c) { _data.push_back(c); return *this; }
+    constexpr basic_string &operator+=(const CharT *s) { return append(s); }
+    constexpr basic_string &operator+=(std::basic_string_view<CharT> sv) { return append(sv); }
+    constexpr basic_string &operator+=(const basic_string &o) { return append(o); }
 
-  constexpr void pop_back() { _backend.pop_back(); }
+    // search
+    constexpr size_type find(CharT c, size_type from = 0) const {
+        for (size_type i = from; i < _data.size(); ++i)
+            if (_data[i] == c) return i;
+        return npos;
+    }
+    constexpr size_type find(std::basic_string_view<CharT> needle,
+                              size_type from = 0) const {
+        size_type n = _data.size(), m = needle.size();
+        if (m == 0) return from <= n ? from : npos;
+        if (m > n) return npos;
+        for (size_type i = from; i + m <= n; ++i) {
+            size_type j = 0;
+            while (j < m && _data[i + j] == needle[j]) ++j;
+            if (j == m) return i;
+        }
+        return npos;
+    }
 
-  /* iterators ---------------------------------------------------------- */
-  constexpr iterator begin() noexcept { return _backend.begin(); }
-  constexpr iterator end() noexcept { return _backend.end(); }
+    // Substring as a new basic_string (default-memory backend).
+    constexpr basic_string substr(size_type pos, size_type count = npos) const {
+        basic_string r;
+        size_type avail = _data.size() > pos ? _data.size() - pos : 0;
+        size_type take  = count < avail ? count : avail;
+        r.reserve(take);
+        for (size_type i = 0; i < take; ++i) r.push_back(_data[pos + i]);
+        return r;
+    }
 
-  constexpr const_iterator begin() const noexcept { return _backend.begin(); }
-  constexpr const_iterator end() const noexcept { return _backend.end(); }
+    constexpr bool operator==(const basic_string &o) const {
+        if (_data.size() != o._data.size()) return false;
+        for (size_type i = 0; i < _data.size(); ++i)
+            if (_data[i] != o._data[i]) return false;
+        return true;
+    }
+    constexpr bool operator==(std::basic_string_view<CharT> sv) const {
+        return view() == sv;
+    }
 
-  constexpr const_iterator cbegin() const noexcept { return begin(); }
-  constexpr const_iterator cend() const noexcept { return end(); }
+    constexpr storage_type       &storage()       noexcept { return _data; }
+    constexpr const storage_type &storage() const noexcept { return _data; }
 };
 
 } // namespace ycetl
