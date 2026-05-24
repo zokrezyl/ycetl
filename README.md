@@ -47,6 +47,67 @@ at runtime — see the `test_*.cpp` files for the canonical patterns.
   `ctypes` module and a `constexpr` C++ tree of the same API. Off by default;
   configure with `-DYCETL_BUILD_WGPU_GLUE=ON`.
 
+## Why not just the C++26 constexpr extensions?
+
+C++26 ships a family of constexpr changes aimed at the same problem
+ycetl solves — most notably *non-transient (a.k.a. "less transient" or
+"promoted") constexpr allocations* (P3032 and friends), and the
+`void* → T*` cast in constant evaluation (P2738). On paper they let you
+write `constexpr std::vector<int> v = {...};` and have the allocation
+survive into runtime. In practice the design has problems ycetl
+sidesteps:
+
+- **Compiler-magic-dependent lifetime.** The standard's promotion rules
+  ask the compiler to *prove* an allocation outlives the constant
+  evaluation and never mutates afterwards. When it can't prove that,
+  you get an opaque "not a constant expression" diagnostic and no
+  recourse. ycetl's compile-time → runtime hand-off is a literal copy
+  into a result struct the user controls — no proof obligation, no
+  silent failure mode.
+- **Result layout you don't see.** The C++26 path takes whatever
+  internal layout `std::vector` / `std::map` / etc. happened to have
+  and embeds *that*. Pointer-laden, padded, with allocator
+  bookkeeping. ycetl's result memory is a plain struct of
+  `std::array`s and scalars that you write — exact layout, predictable
+  size, trivially inspectable in a hex dump, friendly to the
+  optimiser.
+- **`void*` is back.** P2738 reopens `void* → T*` *in constant
+  evaluation*. ycetl was built around the premise that you don't need
+  it — a per-type tuple backbone keeps the entire pipeline typed.
+  Bringing `void*` back recreates exactly the runtime traps (wrong
+  cast, wrong size, wrong alignment) that constexpr was supposed to
+  catch.
+- **Requires C++26 and a bleeding-edge toolchain.** Not in any release
+  of GCC, Clang, or MSVC at the time of writing. ycetl works on
+  C++20-clean GCC 12+ / Clang 16+ today.
+- **One-way street to runtime.** The C++26 design solves
+  "compile-time data → runtime constant", and stops there. ycetl's
+  containers are *also* useful at runtime as per-job typed allocators
+  — same code, same shape, same lifetime story. No second
+  implementation.
+- **No discipline on the type universe.** ycetl makes you enumerate
+  the type set up front, which feels like a tax but is actually a
+  feature: it documents what the computation touches, lets the
+  serialiser do its job, and gives `relevant_types` something to
+  introspect. The C++26 approach silently traces whatever your code
+  happens to allocate, which is fine until it isn't.
+- **No nested-tree story.** The promoted-allocation mechanism is
+  geared at flat containers (`std::vector<int>`). The moment you want
+  a tree of structs containing other containers, you're back to
+  hand-rolling — at which point the result-struct + `std::array`
+  pattern ycetl uses is exactly what you'd reach for anyway, except
+  ycetl already wrote the working-memory side for you.
+
+The trade is honest: ycetl asks for a typed type-set up front and a
+hand-written result struct, and in exchange gives you a transparent,
+debuggable, runtime-equivalent pipeline that works on shipping
+compilers. C++26's promoted constexpr allocations ask you to trust the
+compiler's lifetime analysis and accept whatever layout the standard
+containers happen to have.
+
+See [doc/overview.md](doc/overview.md) for the full rationale and
+the constexpr restrictions that drove this design.
+
 ## Build
 
 ```sh
