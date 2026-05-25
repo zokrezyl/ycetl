@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <boost/ut.hpp>
 #include <string_view>
 #include <ycetl/basic_string.hpp>

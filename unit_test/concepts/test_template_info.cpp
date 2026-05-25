@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <cxxabi.h>
 #include <iostream>
 #include <memory>

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #pragma once
 #include <tuple>
 #include <ycetl/type_system.hpp>

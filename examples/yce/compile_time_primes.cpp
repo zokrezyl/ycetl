@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // End-to-end demo of the yce machine:
 //
 //   1. At compile time, allocate working buffers from a typed multitype_memory

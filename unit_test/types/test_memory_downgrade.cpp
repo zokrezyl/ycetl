@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <boost/ut.hpp>
 #include <ycetl/memory.hpp>
 #include <ycetl/trivial_shared_ptr.hpp>

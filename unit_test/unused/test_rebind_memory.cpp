@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <boost/ut.hpp>
 #include <functional> // For std::less (still needed for dummy_set's std::less, if used)
 #include <initializer_list> // For std::initializer_list (for dummy_string constructor)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Round-trip proof: include the generated header and walk the tree at
 // compile time, then print a short summary at runtime so the test target
 // produces something meaningful.

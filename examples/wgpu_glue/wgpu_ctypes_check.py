@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 """End-to-end smoke test for the generated WebGPU ctypes module.
 
 Asserts a handful of stable identities (well-known enum values, struct

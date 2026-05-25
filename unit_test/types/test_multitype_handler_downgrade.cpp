@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <boost/ut.hpp>
 #include <tuple>
 #include <ycetl/multitype_handler.hpp>

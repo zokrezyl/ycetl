@@ -19,6 +19,7 @@ how multitype memory dodges `void*`, how compile-time data ends up in `.rodata`
 | `dynamic_array<T>`  | `set<K>`                 | `unordered_set<K>`                | `span<T>`           |
 | `vector<T>`         | `map<K,V>`               | `unordered_map<K,V>`              | `stack<T>`          |
 | `array<T,N>`        | `multiset<K>`            | `unordered_multiset<K>`           | `queue<T>`          |
+| `inplace_vector<T,N>` |                        |                                   |                     |
 | `list<T>`           | `multimap<K,V>`          | `unordered_multimap<K,V>`         | `priority_queue<T>` |
 | `forward_list<T>`   |                          |                                   |                     |
 | `deque<T>`          |                          |                                   |                     |
@@ -173,3 +174,7 @@ examples/yce/       compile-time-to-runtime demos
 examples/wgpu_glue/ libclang → ycetl tree → Python ctypes generator
 doc/                design + rationale documents
 ```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

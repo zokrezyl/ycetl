@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <ycetl/dynamic_array.hpp>
 #include <ycetl/memory.hpp>
 

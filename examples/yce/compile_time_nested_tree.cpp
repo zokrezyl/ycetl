@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Nested compile-time tree → runtime value.
 //
 // Builds a three-level tree at constexpr time:

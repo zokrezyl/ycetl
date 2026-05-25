@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Storage handler that manages fixed allocations in a constexpr context
 #include <tuple>
 template <typename... Ts> struct type_set {

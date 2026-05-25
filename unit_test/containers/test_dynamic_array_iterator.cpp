@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 
 #include <iostream> // Needed for iostream include in original compile command, though not directly used in these tests
 #include <numeric>  // For std::iota

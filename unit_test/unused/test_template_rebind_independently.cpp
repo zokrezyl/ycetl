@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include <boost/ut.hpp>
 #include <type_traits> // For std::is_same_v, std::is_class_v, std::is_union_v, std::void_t, std::enable_if_t
 

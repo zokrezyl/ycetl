@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // wgpu_introspect: parse a C header with libclang, build an in-memory
 // type tree, emit two artefacts:
 //
