@@ -96,8 +96,7 @@ public:
   constexpr const_iterator cend() const noexcept { return _storage + _size; }
 
   // modifiers
-  template <typename... Args>
-  constexpr reference emplace_back(Args &&...args) {
+  template <typename... Args> constexpr reference emplace_back(Args &&...args) {
     _storage[_size] = T(std::forward<Args>(args)...);
     return _storage[_size++];
   }

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-
 #include <algorithm>
 #include <boost/ut.hpp>
 #include <memory>

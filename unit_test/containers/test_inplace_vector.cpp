@@ -21,8 +21,7 @@ suite inplace_vector_suite = [] {
   "capacity_is_baked_into_type"_test = [] {
     constexpr auto t = [] {
       inplace_vector<int, 8> v;
-      return inplace_vector<int, 8>::capacity() == 8 && v.empty()
-          && !v.full();
+      return inplace_vector<int, 8>::capacity() == 8 && v.empty() && !v.full();
     };
     static_assert(t());
     expect(t());
