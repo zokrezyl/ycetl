@@ -17,7 +17,7 @@ import wgpu_ctypes as w
 def main() -> int:
     # IntEnum: WGPUTextureFormat is the canonical "did the parse work" probe.
     assert int(w.WGPUTextureFormat.WGPUTextureFormat_RGBA8Unorm) == 18, \
-        "RGBA8Unorm should be 18 per dawn/webgpu.h"
+        "RGBA8Unorm should be 18 per webgpu.h"
 
     # Structure with by-value primitive fields.
     assert ctypes.sizeof(w.WGPUColor) == 32, "WGPUColor is 4×c_double"

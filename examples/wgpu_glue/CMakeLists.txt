@@ -1,4 +1,4 @@
-# wgpu_glue: walk a C header (dawn/webgpu.h here) with libclang, build an
+# wgpu_glue: walk a C header (include/webgpu.h here) with libclang, build an
 # in-memory type tree, emit (a) a Python ctypes module and (b) a constexpr
 # C++ header carrying the same tree as std::array initializers — the
 # "ycetl-shape" tree the constexpr machinery can read.
@@ -62,9 +62,9 @@ target_link_libraries(wgpu_introspect PRIVATE ${LIBCLANG_LIBRARY})
 target_compile_definitions(wgpu_introspect PRIVATE
     WGPU_CLANG_RESOURCE_DIR="${WGPU_CLANG_RESOURCE_DIR}")
 
-# Drive the tool against the bundled dawn/webgpu.h and produce both outputs
+# Drive the tool against the bundled webgpu.h and produce both outputs
 # at build time. Lands in the build dir so it's gitignored automatically.
-set(_wgpu_header "${CMAKE_SOURCE_DIR}/test/include/dawn/webgpu.h")
+set(_wgpu_header "${CMAKE_CURRENT_SOURCE_DIR}/include/webgpu.h")
 set(_py_out      "${CMAKE_CURRENT_BINARY_DIR}/wgpu_ctypes.py")
 set(_hpp_out     "${CMAKE_CURRENT_BINARY_DIR}/wgpu_tree.hpp")
 
@@ -90,7 +90,7 @@ add_dependencies(wgpu_tree_check wgpu_glue_outputs)
 add_test(NAME wgpu_tree_check COMMAND wgpu_tree_check)
 
 # Python-side smoke test: imports the generated ctypes module and
-# checks well-known enum values + struct sizes against dawn/webgpu.h.
+# checks well-known enum values + struct sizes against webgpu.h.
 # Drops if python3 isn't on PATH (libclang is a much harder dep, so if
 # we got this far we almost certainly have python3 too).
 find_package(Python3 COMPONENTS Interpreter)

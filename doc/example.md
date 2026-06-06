@@ -12,7 +12,7 @@ what the example does, how to build it, how to use the output.
 
 ## What you get
 
-Pointed at `test/include/dawn/webgpu.h`, `wgpu_glue` emits two
+Pointed at `examples/wgpu_glue/include/webgpu.h`, `wgpu_glue` emits two
 artefacts:
 
 | Artefact          | What it is                                         | Who consumes it                          |
@@ -107,7 +107,7 @@ generator emits.
 
 To rebuild after upgrading the header, re-run the build. CMake
 re-invokes `wgpu_introspect` automatically whenever
-`test/include/dawn/webgpu.h` changes.
+`examples/wgpu_glue/include/webgpu.h` changes.
 
 ## Using `wgpu_tree.hpp` from C++
 
@@ -173,5 +173,5 @@ scope.
 | C++ consumer (constexpr tree round-trip)      | `examples/wgpu_glue/wgpu_tree_check.cpp`             |
 | Python consumer (smoke test)                  | `examples/wgpu_glue/wgpu_ctypes_check.py`            |
 | Build wiring (libclang discovery, codegen)    | `examples/wgpu_glue/CMakeLists.txt`                  |
-| The bundled WebGPU header                     | `test/include/dawn/webgpu.h`                         |
+| The bundled WebGPU header                     | `examples/wgpu_glue/include/webgpu.h`                |
 | Why the constexpr tree looks like that        | [`doc/overview.md`](overview.md)                     |

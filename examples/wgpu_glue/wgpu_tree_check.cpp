@@ -29,13 +29,13 @@ constexpr int find_enum(std::string_view name) {
 } // namespace
 
 int main() {
-  // These are stable identities in dawn/webgpu.h. If the parse ever
+  // These are stable identities in webgpu.h. If the parse ever
   // silently regresses to "nothing found" we'll catch it at compile
   // time.
   static_assert(wgpu_tree::record_count > 50,
-                "expected dawn webgpu.h to declare >50 records");
+                "expected webgpu.h to declare >50 records");
   static_assert(wgpu_tree::enum_count > 40,
-                "expected dawn webgpu.h to declare >40 enums");
+                "expected webgpu.h to declare >40 enums");
 
   static_assert(find_enum("WGPUTextureFormat") >= 0,
                 "WGPUTextureFormat must be present");

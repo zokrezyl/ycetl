@@ -33,7 +33,7 @@ if(YCETL_BUILD_EXAMPLES)
   add_subdirectory(examples/yce)
 endif()
 
-# libclang-driven example: walks dawn/webgpu.h, emits a Python ctypes
+# libclang-driven example: walks webgpu.h, emits a Python ctypes
 # module and a constexpr C++ tree the consumer can walk at compile time.
 # Off by default — only relevant when libclang is available.
 option(YCETL_BUILD_WGPU_GLUE "Build the WebGPU clang→tree→python example" OFF)

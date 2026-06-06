@@ -49,7 +49,7 @@ at runtime — see the `test_*.cpp` files for the canonical patterns.
 - `examples/yce/compile_time_nested_tree.cpp` — three-level tree
   (bucket → number → factor) built at constexpr time, ~6 KB of `.rodata`,
   with `static_assert`s that walk every level.
-- `examples/wgpu_glue/` — libclang walks `dawn/webgpu.h`, emits both a Python
+- `examples/wgpu_glue/` — libclang walks `examples/wgpu_glue/include/webgpu.h`, emits both a Python
   `ctypes` module and a `constexpr` C++ tree of the same API. Off by default;
   configure with `-DYCETL_BUILD_WGPU_GLUE=ON`.
 
