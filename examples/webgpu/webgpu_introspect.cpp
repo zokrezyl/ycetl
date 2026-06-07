@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-// wgpu_introspect: parse a C header with libclang, build an in-memory
+// webgpu_introspect: parse a C header with libclang, build an in-memory
 // type tree, emit two artefacts:
 //
 //   --python <path>   a Python module with ctypes.Structure + IntEnum
@@ -18,6 +18,7 @@
 #include <clang-c/Index.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -50,6 +51,8 @@ struct cx_string_guard {
 struct field_info {
   std::string name;
   std::string type_spelling; // exactly what the header says
+  std::string ctypes_type;   // ABI-correct Python ctypes expression
+  std::string record_dep;    // by-value struct tag this field embeds, if any
   std::int64_t offset_bits;  // -1 if unknown (e.g. flexible array)
   std::int64_t size_bytes;   // -1 if unknown
 };
@@ -77,12 +80,28 @@ struct enum_info {
 struct typedef_info {
   std::string name;
   std::string underlying;
+  // Function-pointer typedefs (the WGPU*Callback family) carry a ctypes
+  // CFUNCTYPE signature so the emitter can produce a usable callback type.
+  bool is_callback = false;
+  std::string callback_ret;
+  std::vector<std::string> callback_args;
+};
+
+// A file-scope integer constant: either a `static const` flag (the
+// WGPU*Usage_* / WGPUColorWriteMask_* / ... families) or an object-like
+// integer macro (WGPU_DEPTH_SLICE_UNDEFINED, ...). `value` is a ready-to-emit
+// Python integer literal.
+struct constant_info {
+  std::string name;
+  std::string value;
 };
 
 struct func_info {
   std::string name;
   std::string return_type;
+  std::string return_ctype;              // ABI-correct ctypes expression
   std::vector<std::string> arg_types;
+  std::vector<std::string> arg_ctypes;   // ABI-correct ctypes expressions
   std::vector<std::string> arg_names;
 };
 
@@ -91,6 +110,7 @@ struct api_tree {
   std::vector<enum_info> enums;
   std::vector<typedef_info> typedefs;
   std::vector<func_info> functions;
+  std::vector<constant_info> constants;
 };
 
 // ---- libclang walker -----------------------------------------------------
@@ -108,6 +128,101 @@ std::string spelling(CXCursor c) {
 
 std::string type_spelling(CXType t) {
   return cx_string_guard(clang_getTypeSpelling(t)).str();
+}
+
+// Map a libclang type to a Python ctypes expression that preserves the real
+// C layout. The string-based mapper this replaces flattened every embedded
+// by-value struct and every enum to c_void_p (8 bytes), which corrupted the
+// size/offsets of any descriptor carrying a WGPUStringView label or a
+// WGPUChainedStruct chain. Here we dispatch on the actual CXType kind:
+//   - embedded struct by value -> its nested Structure class (by tag name)
+//   - enum                     -> its real underlying integer (4 bytes)
+//   - fixed array              -> "elem * N"
+//   - pointer                  -> c_void_p
+//   - typedef / elaborated     -> resolve to the canonical type
+std::string ctypes_for(CXType t) {
+  switch (t.kind) {
+  case CXType_Void:
+    return "None";
+  case CXType_Bool:
+    return "c_bool";
+  case CXType_Char_S:
+  case CXType_SChar:
+    return "c_char";
+  case CXType_Char_U:
+  case CXType_UChar:
+    return "c_ubyte";
+  case CXType_Short:
+    return "c_short";
+  case CXType_UShort:
+    return "c_ushort";
+  case CXType_Int:
+    return "c_int";
+  case CXType_UInt:
+    return "c_uint";
+  case CXType_Long:
+    return "c_long";
+  case CXType_ULong:
+    return "c_ulong";
+  case CXType_LongLong:
+    return "c_longlong";
+  case CXType_ULongLong:
+    return "c_ulonglong";
+  case CXType_Float:
+    return "c_float";
+  case CXType_Double:
+    return "c_double";
+  case CXType_Pointer:
+    return "c_void_p";
+  case CXType_Enum:
+    return ctypes_for(clang_getEnumDeclIntegerType(clang_getTypeDeclaration(t)));
+  case CXType_Record: {
+    std::string name = spelling(clang_getTypeDeclaration(t));
+    if (name.empty()) {
+      // Anonymous record embedded by value — keep the size as a byte blob
+      // so the surrounding layout stays correct (field access is lost).
+      long long size_bytes = clang_Type_getSizeOf(t);
+      return "(c_char * " + std::to_string(size_bytes > 0 ? size_bytes : 0)
+             + ")";
+    }
+    return name;
+  }
+  case CXType_ConstantArray:
+    return ctypes_for(clang_getArrayElementType(t)) + " * "
+           + std::to_string(clang_getArraySize(t));
+  case CXType_Typedef:
+  case CXType_Elaborated:
+    return ctypes_for(clang_getCanonicalType(t));
+  default: {
+    // Unknown kind: keep the right footprint so the struct size survives.
+    long long size_bytes = clang_Type_getSizeOf(t);
+    switch (size_bytes) {
+    case 1:
+      return "c_uint8";
+    case 2:
+      return "c_uint16";
+    case 4:
+      return "c_uint32";
+    case 8:
+      return "c_uint64";
+    default:
+      return "c_void_p";
+    }
+  }
+  }
+}
+
+// If `t` is (an array of) a by-value struct, return that struct's tag name so
+// the emitter can order its definition before any struct that embeds it.
+// Pointers, enums and scalars have no by-value layout dependency.
+std::string record_dependency(CXType t) {
+  CXType canonical = clang_getCanonicalType(t);
+  while (canonical.kind == CXType_ConstantArray
+         || canonical.kind == CXType_IncompleteArray)
+    canonical = clang_getCanonicalType(clang_getArrayElementType(canonical));
+  if (canonical.kind == CXType_Record)
+    return spelling(clang_getTypeDeclaration(canonical));
+  return "";
 }
 
 void visit_struct(CXCursor decl, api_tree &tree) {
@@ -147,6 +262,8 @@ void visit_struct(CXCursor decl, api_tree &tree) {
         f.name = spelling(field);
         CXType ft = clang_getCursorType(field);
         f.type_spelling = type_spelling(ft);
+        f.ctypes_type = ctypes_for(ft);
+        f.record_dep = record_dependency(ft);
         f.offset_bits = clang_Cursor_getOffsetOfField(field);
         f.size_bytes = clang_Type_getSizeOf(ft);
         if (f.offset_bits < 0)
@@ -206,8 +323,97 @@ void visit_typedef(CXCursor decl, api_tree &tree) {
     return;
   typedef_info td;
   td.name = spelling(decl);
-  td.underlying = type_spelling(clang_getTypedefDeclUnderlyingType(decl));
+  CXType underlying = clang_getTypedefDeclUnderlyingType(decl);
+  td.underlying = type_spelling(underlying);
+
+  // A function-pointer typedef (e.g. WGPURequestAdapterCallback) — capture its
+  // signature so the emitter can produce a CFUNCTYPE the caller can wrap.
+  CXType canonical = clang_getCanonicalType(underlying);
+  if (canonical.kind == CXType_Pointer) {
+    CXType pointee = clang_getPointeeType(canonical);
+    if (pointee.kind == CXType_FunctionProto
+        || pointee.kind == CXType_FunctionNoProto) {
+      td.is_callback = true;
+      td.callback_ret = ctypes_for(clang_getResultType(pointee));
+      int nargs = clang_getNumArgTypes(pointee);
+      for (int i = 0; i < nargs; ++i)
+        td.callback_args.push_back(ctypes_for(clang_getArgType(pointee, i)));
+    }
+  }
   tree.typedefs.push_back(std::move(td));
+}
+
+// A file-scope `static const` integer (the WGPU*Usage_* flag families and
+// friends) — captured by evaluating its initializer.
+void visit_constant(CXCursor decl, api_tree &tree) {
+  if (!from_main_header(decl))
+    return;
+  CXType t = clang_getCursorType(decl);
+  if (!clang_isConstQualifiedType(t))
+    return;
+  CXEvalResult ev = clang_Cursor_Evaluate(decl);
+  if (!ev)
+    return;
+  if (clang_EvalResult_getKind(ev) == CXEval_Int) {
+    constant_info ci;
+    ci.name = spelling(decl);
+    ci.value = std::to_string(clang_EvalResult_getAsLongLong(ev));
+    tree.constants.push_back(std::move(ci));
+  }
+  clang_EvalResult_dispose(ev);
+}
+
+// An object-like integer macro (WGPU_DEPTH_SLICE_UNDEFINED = (UINT32_MAX), …).
+// Only single-value bodies are resolved; anything else is skipped.
+void visit_macro(CXCursor decl, api_tree &tree) {
+  if (!from_main_header(decl) || clang_Cursor_isMacroFunctionLike(decl))
+    return;
+  std::string name = spelling(decl);
+  if (name.rfind("WGPU", 0) != 0)
+    return; // skip internal helper macros (WGPU_NULLABLE, _wgpu_*, …)
+
+  CXTranslationUnit tu = clang_Cursor_getTranslationUnit(decl);
+  CXToken *tokens = nullptr;
+  unsigned count = 0;
+  clang_tokenize(tu, clang_getCursorExtent(decl), &tokens, &count);
+  std::vector<std::string> body; // tokens after the macro name, sans parens
+  for (unsigned i = 1; i < count; ++i) {
+    std::string tok = cx_string_guard(clang_getTokenSpelling(tu, tokens[i])).str();
+    if (tok != "(" && tok != ")")
+      body.push_back(tok);
+  }
+  clang_disposeTokens(tu, tokens, count);
+  if (body.size() != 1)
+    return;
+
+  static const std::unordered_map<std::string, std::string> limits = {
+      {"UINT8_MAX", "0xff"},          {"UINT16_MAX", "0xffff"},
+      {"UINT32_MAX", "0xffffffff"},   {"UINT64_MAX", "0xffffffffffffffff"},
+      {"SIZE_MAX", "0xffffffffffffffff"},
+      {"INT32_MAX", "0x7fffffff"},    {"INT64_MAX", "0x7fffffffffffffff"},
+  };
+  std::string tok = body[0];
+  std::string value;
+  if (auto it = limits.find(tok); it != limits.end()) {
+    value = it->second;
+  } else {
+    // Strip integer-literal suffixes (u/U/l/L) and accept decimal / 0x forms.
+    std::string digits = tok;
+    while (!digits.empty()
+           && (digits.back() == 'u' || digits.back() == 'U' || digits.back() == 'l'
+               || digits.back() == 'L'))
+      digits.pop_back();
+    bool hex = digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0;
+    std::size_t start = hex ? 2 : 0;
+    if (digits.size() > start
+        && std::all_of(digits.begin() + start, digits.end(), [hex](char c) {
+             return hex ? std::isxdigit((unsigned char)c)
+                        : std::isdigit((unsigned char)c);
+           }))
+      value = digits;
+  }
+  if (!value.empty())
+    tree.constants.push_back({name, value});
 }
 
 void visit_function(CXCursor decl, api_tree &tree) {
@@ -216,11 +422,15 @@ void visit_function(CXCursor decl, api_tree &tree) {
   func_info f;
   f.name = spelling(decl);
   CXType ft = clang_getCursorType(decl);
-  f.return_type = type_spelling(clang_getResultType(ft));
+  CXType rt = clang_getResultType(ft);
+  f.return_type = type_spelling(rt);
+  f.return_ctype = ctypes_for(rt);
   int nargs = clang_Cursor_getNumArguments(decl);
   for (int i = 0; i < nargs; ++i) {
     CXCursor a = clang_Cursor_getArgument(decl, i);
-    f.arg_types.push_back(type_spelling(clang_getCursorType(a)));
+    CXType at = clang_getCursorType(a);
+    f.arg_types.push_back(type_spelling(at));
+    f.arg_ctypes.push_back(ctypes_for(at));
     f.arg_names.push_back(spelling(a));
   }
   tree.functions.push_back(std::move(f));
@@ -241,6 +451,12 @@ CXChildVisitResult tu_visitor(CXCursor c, CXCursor /*parent*/,
     break;
   case CXCursor_FunctionDecl:
     visit_function(c, tree);
+    break;
+  case CXCursor_VarDecl:
+    visit_constant(c, tree);
+    break;
+  case CXCursor_MacroDefinition:
+    visit_macro(c, tree);
     break;
   default:
     break;
@@ -363,7 +579,7 @@ py_type_map build_py_map(const api_tree &tree) {
 
 void emit_python(const api_tree &tree, const std::string &path) {
   std::ofstream out(path);
-  out << "# Generated by wgpu_introspect. Do not edit by hand.\n"
+  out << "# Generated by webgpu_introspect. Do not edit by hand.\n"
          "# Source: webgpu.h\n"
          "from ctypes import (\n"
          "    Structure, CFUNCTYPE, POINTER,\n"
@@ -400,6 +616,17 @@ void emit_python(const api_tree &tree, const std::string &path) {
     out << "\n";
   }
 
+  // Constants: the `static const` flag families (WGPUBufferUsage_*, …) and
+  // object-like integer macros (WGPU_DEPTH_SLICE_UNDEFINED, …). These are part
+  // of the API surface but are neither enums nor structs, so callers would
+  // otherwise have to hand-copy the magic numbers.
+  if (!tree.constants.empty()) {
+    out << "# Flag and sentinel constants.\n";
+    for (const auto &c : tree.constants)
+      out << c.name << " = " << c.value << "\n";
+    out << "\n";
+  }
+
   // Forward-declare struct classes so cross-references in _fields_ work
   // (pointer-typed fields become c_void_p and don't need the real layout).
   for (const auto &r : tree.records)
@@ -423,18 +650,12 @@ void emit_python(const api_tree &tree, const std::string &path) {
   std::vector<std::vector<std::size_t>> deps(tree.records.size());
   for (std::size_t i = 0; i < tree.records.size(); ++i) {
     for (const auto &f : tree.records[i].fields) {
-      // Pointer / array-of-pointer fields don't need the target laid out.
-      if (f.type_spelling.find('*') != std::string::npos)
+      // Only by-value embedded structs create a layout dependency; the
+      // parser already resolved which struct that is (empty for pointers,
+      // enums and scalars).
+      if (f.record_dep.empty())
         continue;
-      // Find a bare-name dependency: strip const + leading qualifiers.
-      std::string s = f.type_spelling;
-      if (s.rfind("const ", 0) == 0)
-        s = s.substr(6);
-      if (auto sp = s.rfind(' '); sp != std::string::npos)
-        s = s.substr(sp + 1);
-      if (auto br = s.find('['); br != std::string::npos)
-        s = s.substr(0, br);
-      if (auto it = record_idx.find(s); it != record_idx.end())
+      if (auto it = record_idx.find(f.record_dep); it != record_idx.end())
         deps[i].push_back(it->second);
     }
   }
@@ -467,6 +688,8 @@ void emit_python(const api_tree &tree, const std::string &path) {
   for (const auto &t : tree.typedefs) {
     if (pm.enum_names.count(t.name) || pm.record_names.count(t.name))
       continue;
+    if (t.is_callback)
+      continue; // emitted as CFUNCTYPE after the struct layouts are known
     auto it = pm.typedef_to_ctypes.find(t.name);
     if (it == pm.typedef_to_ctypes.end())
       continue;
@@ -485,24 +708,54 @@ void emit_python(const api_tree &tree, const std::string &path) {
     }
     out << r.name << "._fields_ = [\n";
     for (const auto &f : r.fields) {
-      std::string ct = pm.lookup(f.type_spelling);
-      out << "    (\"" << f.name << "\", " << ct
+      out << "    (\"" << f.name << "\", " << f.ctypes_type
           << "),  # offset=" << (f.offset_bits / 8) << " size=" << f.size_bytes
           << " src=" << f.type_spelling << "\n";
     }
     out << "]\n\n";
   }
 
-  // Functions as CFUNCTYPE prototypes (ready to bind via a dlopen'd
-  // libwebgpu_dawn.so on the Python side).
-  out << "# Function prototypes (bind with cdll.LoadLibrary(...).<name>)\n";
-  for (const auto &f : tree.functions) {
-    out << f.name << "_proto = CFUNCTYPE(";
-    out << pm.lookup(f.return_type);
-    for (const auto &a : f.arg_types)
-      out << ", " << pm.lookup(a);
+  // Callback function-pointer types (WGPU*Callback). Emitted here, after the
+  // struct layouts, because their signatures embed structs by value (e.g.
+  // WGPUStringView) that must already be complete.
+  out << "# Callback types — wrap a Python function: cb = WGPUFooCallback(fn)\n";
+  for (const auto &t : tree.typedefs) {
+    if (!t.is_callback)
+      continue;
+    out << t.name << " = CFUNCTYPE("
+        << (t.callback_ret.empty() ? "None" : t.callback_ret);
+    for (const auto &a : t.callback_args)
+      out << ", " << a;
     out << ")\n";
   }
+  out << "\n";
+
+  // Function table + loader. `load(path)` binds every function on the dlopen'd
+  // library with its real restype/argtypes, so callers never hand-write FFI
+  // signatures — they just `lib = webgpu_ctypes.load("libwebgpu_dawn.so")`.
+  out << "_FUNCTIONS = [\n";
+  for (const auto &f : tree.functions) {
+    out << "    (\"" << f.name << "\", "
+        << (f.return_ctype.empty() ? "None" : f.return_ctype) << ", [";
+    for (std::size_t i = 0; i < f.arg_ctypes.size(); ++i)
+      out << (i ? ", " : "") << f.arg_ctypes[i];
+    out << "]),\n";
+  }
+  out << "]\n\n";
+
+  out << "def load(path):\n"
+         "    \"\"\"dlopen the WebGPU library and bind every function with its\n"
+         "    ctypes restype/argtypes. Returns the ctypes.CDLL.\"\"\"\n"
+         "    import ctypes\n"
+         "    lib = ctypes.CDLL(path)\n"
+         "    for name, restype, argtypes in _FUNCTIONS:\n"
+         "        try:\n"
+         "            fn = getattr(lib, name)\n"
+         "        except AttributeError:\n"
+         "            continue  # symbol not exported by this build\n"
+         "        fn.restype = restype\n"
+         "        fn.argtypes = argtypes\n"
+         "    return lib\n";
 }
 
 // ---- C++ constexpr-tree emitter -----------------------------------------
@@ -521,7 +774,7 @@ std::string esc(const std::string &s) {
 
 void emit_tree(const api_tree &tree, const std::string &path) {
   std::ofstream out(path);
-  out << "// Generated by wgpu_introspect. Do not edit by hand.\n"
+  out << "// Generated by webgpu_introspect. Do not edit by hand.\n"
          "// Source: webgpu.h\n"
          "//\n"
          "// The whole API description is a single constexpr value tree of\n"
@@ -531,7 +784,7 @@ void emit_tree(const api_tree &tree, const std::string &path) {
          "#include <array>\n"
          "#include <cstdint>\n"
          "#include <string_view>\n\n"
-         "namespace wgpu_tree {\n\n"
+         "namespace webgpu_tree {\n\n"
          "struct field_info {\n"
          "    std::string_view name;\n"
          "    std::string_view type_spelling;\n"
@@ -615,7 +868,7 @@ void emit_tree(const api_tree &tree, const std::string &path) {
     out << "    {\"" << esc(tree.enums[i].name) << "\", &enm_" << i << "},\n";
   out << "}};\n\n";
 
-  out << "} // namespace wgpu_tree\n";
+  out << "} // namespace webgpu_tree\n";
 }
 
 // ---- CLI -----------------------------------------------------------------
@@ -657,7 +910,7 @@ bool parse_cli(int argc, char **argv, cli_args &out) {
     }
   }
   if (out.header.empty()) {
-    std::fprintf(stderr, "usage: wgpu_introspect --header H.h [--python "
+    std::fprintf(stderr, "usage: webgpu_introspect --header H.h [--python "
                          "out.py] [--tree out.hpp]\n");
     return false;
   }
@@ -676,10 +929,10 @@ int main(int argc, char **argv) {
   // built-in headers (stddef.h, stdint.h, …) the parsed header pulls in
   // are found.
   std::vector<const char *> clang_args = {"-xc", "-std=c11"};
-#ifdef WGPU_CLANG_RESOURCE_DIR
-  if (std::string_view(WGPU_CLANG_RESOURCE_DIR).size() > 0) {
+#ifdef WEBGPU_CLANG_RESOURCE_DIR
+  if (std::string_view(WEBGPU_CLANG_RESOURCE_DIR).size() > 0) {
     clang_args.push_back("-resource-dir");
-    clang_args.push_back(WGPU_CLANG_RESOURCE_DIR);
+    clang_args.push_back(WEBGPU_CLANG_RESOURCE_DIR);
   }
 #endif
   CXIndex index = clang_createIndex(0, 0);
@@ -725,8 +978,10 @@ int main(int argc, char **argv) {
             [](const auto &a, const auto &b) { return a.name < b.name; });
   std::sort(tree.functions.begin(), tree.functions.end(),
             [](const auto &a, const auto &b) { return a.name < b.name; });
+  std::sort(tree.constants.begin(), tree.constants.end(),
+            [](const auto &a, const auto &b) { return a.name < b.name; });
 
-  std::cerr << "wgpu_introspect: records=" << tree.records.size()
+  std::cerr << "webgpu_introspect: records=" << tree.records.size()
             << " enums=" << tree.enums.size()
             << " typedefs=" << tree.typedefs.size()
             << " funcs=" << tree.functions.size() << '\n';

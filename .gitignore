@@ -27,3 +27,7 @@ test/test_vector
 
 # CMakePresets backup variants (e.g. __CMakePresets_with_inheritance.json)
 **/__*.json
+
+# webgpu dawn app: build artifacts, not vendored
+examples/webgpu/*/lib/*.so
+examples/webgpu/dawn/app/*.png

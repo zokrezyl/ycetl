@@ -1,6 +1,6 @@
 # Worked example: generating a Python WebGPU binding with ycetl
 
-This is a practical walk-through of `examples/wgpu_glue/` — the example
+This is a practical walk-through of `examples/webgpu/` — the example
 that demonstrates **the most useful real-world thing ycetl is built
 for**: walking a C API header at build time and producing both a
 runtime-usable binding (Python `ctypes`) and a constexpr C++ mirror of
@@ -12,13 +12,13 @@ what the example does, how to build it, how to use the output.
 
 ## What you get
 
-Pointed at `examples/wgpu_glue/include/webgpu.h`, `wgpu_glue` emits two
+Pointed at `examples/webgpu/dawn/include/webgpu.h`, `webgpu` emits two
 artefacts:
 
 | Artefact          | What it is                                         | Who consumes it                          |
 | ----------------- | -------------------------------------------------- | ---------------------------------------- |
-| `wgpu_ctypes.py`  | Pure-Python module of `ctypes.Structure` / `IntEnum` definitions, one per record / enum in the header. | Any Python program that wants to call into a WebGPU shared library — no SWIG, no Cython, no manual FFI wrapping. |
-| `wgpu_tree.hpp`   | C++ header re-stating the same tree as `constexpr std::array` initialisers. | A consumer TU that wants to walk the WebGPU API at compile time — generate dispatch tables, validate struct layouts, emit further bindings. |
+| `webgpu_ctypes.py`  | Pure-Python module of `ctypes.Structure` / `IntEnum` definitions, one per record / enum in the header. | Any Python program that wants to call into a WebGPU shared library — no SWIG, no Cython, no manual FFI wrapping. |
+| `webgpu_tree.hpp`   | C++ header re-stating the same tree as `constexpr std::array` initialisers. | A consumer TU that wants to walk the WebGPU API at compile time — generate dispatch tables, validate struct layouts, emit further bindings. |
 
 Both come from a single libclang parse, so they can never drift apart.
 
@@ -46,11 +46,11 @@ shape of the most common production use of ycetl.
 
 ## Building it
 
-`wgpu_glue` is **off by default** because libclang is a heavy
+`webgpu` is **off by default** because libclang is a heavy
 dependency. Turn it on with:
 
 ```sh
-cmake -S . -B build-linux -G Ninja -DYCETL_BUILD_WGPU_GLUE=ON
+cmake -S . -B build-linux -G Ninja -DYCETL_BUILD_WEBGPU=ON
 cmake --build build-linux
 ctest --test-dir build-linux
 ```
@@ -61,28 +61,28 @@ and skips the example — the rest of the build is unaffected.
 
 Two tests run on build:
 
-- `wgpu_tree_check` — C++ TU that includes `wgpu_tree.hpp` and runs
+- `webgpu_tree_check` — C++ TU that includes `webgpu_tree.hpp` and runs
   `static_assert`s over the constexpr tree (record count, enum count,
   presence of `WGPUTextureFormat` / `WGPUBindGroupEntry`).
-- `wgpu_ctypes_check` — Python script that imports `wgpu_ctypes` and
+- `webgpu_ctypes_check` — Python script that imports `webgpu_ctypes` and
   asserts well-known identities (`WGPUTextureFormat_RGBA8Unorm == 18`,
   `sizeof(WGPUColor) == 32`, `sizeof(WGPUBindGroupEntry) == 56`).
 
-The outputs land in `build-linux/examples/wgpu_glue/`:
+The outputs land in `build-linux/examples/webgpu/`:
 
 ```
-wgpu_ctypes.py   # Python ctypes module
-wgpu_tree.hpp    # constexpr C++ tree
+webgpu_ctypes.py   # Python ctypes module
+webgpu_tree.hpp    # constexpr C++ tree
 ```
 
-## Using `wgpu_ctypes.py` from Python
+## Using `webgpu_ctypes.py` from Python
 
 The generated module is plain Python — no compiled extension, no
 build step for the consumer.
 
 ```python
 import ctypes
-import wgpu_ctypes as w
+import webgpu_ctypes as w
 
 # Enums are IntEnum subclasses.
 fmt = w.WGPUTextureFormat.WGPUTextureFormat_RGBA8Unorm
@@ -106,17 +106,17 @@ sizing, enum values, opaque handle types — is exactly what the
 generator emits.
 
 To rebuild after upgrading the header, re-run the build. CMake
-re-invokes `wgpu_introspect` automatically whenever
-`examples/wgpu_glue/include/webgpu.h` changes.
+re-invokes `webgpu_introspect` automatically whenever
+`examples/webgpu/dawn/include/webgpu.h` changes.
 
-## Using `wgpu_tree.hpp` from C++
+## Using `webgpu_tree.hpp` from C++
 
 The C++ side is what makes this an *ycetl* example rather than a
 plain code generator. The emitted header looks like:
 
 ```cpp
-// wgpu_tree.hpp (generated)
-namespace wgpu_tree {
+// webgpu_tree.hpp (generated)
+namespace webgpu_tree {
     inline constexpr std::array records  = { /* … */ };
     inline constexpr std::array enums    = { /* … */ };
     inline constexpr std::array typedefs = { /* … */ };
@@ -132,35 +132,35 @@ namespace wgpu_tree {
 A consumer can walk it under `static_assert`:
 
 ```cpp
-#include "wgpu_tree.hpp"
+#include "webgpu_tree.hpp"
 
 constexpr int find_enum(std::string_view name) {
-    for (std::size_t i = 0; i < wgpu_tree::enums.size(); ++i)
-        if (wgpu_tree::enums[i].name == name) return int(i);
+    for (std::size_t i = 0; i < webgpu_tree::enums.size(); ++i)
+        if (webgpu_tree::enums[i].name == name) return int(i);
     return -1;
 }
 
 static_assert(find_enum("WGPUTextureFormat") >= 0);
-static_assert(wgpu_tree::record_count > 50);
+static_assert(webgpu_tree::record_count > 50);
 ```
 
-See `examples/wgpu_glue/wgpu_tree_check.cpp` for the full version. The
+See `examples/webgpu/webgpu_tree_check.cpp` for the full version. The
 tree itself uses ycetl-shape result memory: plain `std::array`s of
 plain structs, baked into `.rodata`, walkable in constant evaluation.
 
 ## Adapting it to your own header
 
-The minimal changes to point `wgpu_glue` at a different C API:
+The minimal changes to point `webgpu` at a different C API:
 
 1. Drop the new header somewhere under the source tree.
-2. In `examples/wgpu_glue/CMakeLists.txt`, change `_wgpu_header` to
+2. In `examples/webgpu/CMakeLists.txt`, change `_webgpu_header` to
    point at it.
-3. Adjust the asserts in `wgpu_tree_check.cpp` /
-   `wgpu_ctypes_check.py` to reference stable identities from the
+3. Adjust the asserts in `webgpu_tree_check.cpp` /
+   `webgpu_ctypes_check.py` to reference stable identities from the
    new API (some enum value you trust, some struct size you can
    look up).
 
-`wgpu_introspect.cpp` doesn't know anything WebGPU-specific — the
+`webgpu_introspect.cpp` doesn't know anything WebGPU-specific — the
 record / enum / typedef / function walks are libclang generics. The
 "wgpu" in the name is the *example*'s API, not the generator's
 scope.
@@ -169,9 +169,9 @@ scope.
 
 | What                                          | Where                                                |
 | --------------------------------------------- | ---------------------------------------------------- |
-| libclang walk + emitters                      | `examples/wgpu_glue/wgpu_introspect.cpp`             |
-| C++ consumer (constexpr tree round-trip)      | `examples/wgpu_glue/wgpu_tree_check.cpp`             |
-| Python consumer (smoke test)                  | `examples/wgpu_glue/wgpu_ctypes_check.py`            |
-| Build wiring (libclang discovery, codegen)    | `examples/wgpu_glue/CMakeLists.txt`                  |
-| The bundled WebGPU header                     | `examples/wgpu_glue/include/webgpu.h`                |
+| libclang walk + emitters                      | `examples/webgpu/webgpu_introspect.cpp`             |
+| C++ consumer (constexpr tree round-trip)      | `examples/webgpu/webgpu_tree_check.cpp`             |
+| Python consumer (smoke test)                  | `examples/webgpu/webgpu_ctypes_check.py`            |
+| Build wiring (libclang discovery, codegen)    | `examples/webgpu/CMakeLists.txt`                  |
+| The bundled WebGPU header                     | `examples/webgpu/dawn/include/webgpu.h`                |
 | Why the constexpr tree looks like that        | [`doc/overview.md`](overview.md)                     |

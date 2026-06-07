@@ -49,9 +49,9 @@ at runtime — see the `test_*.cpp` files for the canonical patterns.
 - `examples/yce/compile_time_nested_tree.cpp` — three-level tree
   (bucket → number → factor) built at constexpr time, ~6 KB of `.rodata`,
   with `static_assert`s that walk every level.
-- `examples/wgpu_glue/` — libclang walks `examples/wgpu_glue/include/webgpu.h`, emits both a Python
+- `examples/webgpu/` — libclang walks `examples/webgpu/dawn/include/webgpu.h`, emits both a Python
   `ctypes` module and a `constexpr` C++ tree of the same API. Off by default;
-  configure with `-DYCETL_BUILD_WGPU_GLUE=ON`.
+  configure with `-DYCETL_BUILD_WEBGPU=ON`.
 
 ## Why not just the C++26 constexpr extensions?
 
@@ -136,7 +136,7 @@ Options:
 | ---------------------------- | ------- | --------------------------------------------------- |
 | `YCETL_BUILD_TESTS`          | `ON`    | build `unit_test/`                                  |
 | `YCETL_BUILD_EXAMPLES`       | `ON`    | build `examples/yce/`                               |
-| `YCETL_BUILD_WGPU_GLUE`      | `OFF`   | build the libclang→ctypes example (needs libclang)  |
+| `YCETL_BUILD_WEBGPU`      | `OFF`   | build the libclang→ctypes example (needs libclang)  |
 
 ## Quick taste
 
@@ -171,7 +171,7 @@ The `ycetl::map` is dynamically grown at constexpr time using
 include/ycetl/      header-only library
 unit_test/          container, type-system, concept tests (ctest-driven)
 examples/yce/       compile-time-to-runtime demos
-examples/wgpu_glue/ libclang → ycetl tree → Python ctypes generator
+examples/webgpu/ libclang → ycetl tree → Python ctypes generator
 doc/                design + rationale documents
 ```
 

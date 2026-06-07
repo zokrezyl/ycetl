@@ -23,8 +23,10 @@ target_link_libraries(yconstexpr INTERFACE ytrace ytrace::ytrace field_reflectio
 add_library(yconstexpr::yconstexpr  ALIAS yconstexpr)
 
 option(YCETL_BUILD_TESTS "Build unit tests" ON)
+# Unconditional so examples that register tests (e.g. examples/webgpu) still
+# work with ctest even when YCETL_BUILD_TESTS is OFF.
+enable_testing()
 if(YCETL_BUILD_TESTS)
-  enable_testing()
   add_subdirectory(unit_test)
 endif()
 
@@ -36,8 +38,8 @@ endif()
 # libclang-driven example: walks webgpu.h, emits a Python ctypes
 # module and a constexpr C++ tree the consumer can walk at compile time.
 # Off by default — only relevant when libclang is available.
-option(YCETL_BUILD_WGPU_GLUE "Build the WebGPU clang→tree→python example" OFF)
-if(YCETL_BUILD_WGPU_GLUE)
-  add_subdirectory(examples/wgpu_glue)
+option(YCETL_BUILD_WEBGPU "Build the WebGPU clang→tree→python example" OFF)
+if(YCETL_BUILD_WEBGPU)
+  add_subdirectory(examples/webgpu)
 endif()
 

@@ -319,7 +319,7 @@ runtime, with the same shape:
   tables, codecs — compute once at build time, ship as `.rodata`.
 - **AST → runtime code-gen.** Walk an external description (a header
   file, a schema, a grammar) at build time, produce a constexpr tree
-  the runtime can introspect. `examples/wgpu_glue/` is the worked
+  the runtime can introspect. `examples/webgpu/` is the worked
   example.
 - **Compile-time-verified runtime structures.** Embed graphs, state
   machines, parser tables into the binary with `static_assert`s
@@ -335,4 +335,4 @@ runtime, with the same shape:
 | Per-T backends            | `include/ycetl/typed_dynamic_memory.hpp`, `include/ycetl/typed_static_memory.hpp` |
 | Containers                | `include/ycetl/<name>.hpp`              |
 | End-to-end demos          | `examples/yce/compile_time_*.cpp`       |
-| Build-time codegen demo   | `examples/wgpu_glue/`                   |
+| Build-time codegen demo   | `examples/webgpu/`                   |
