@@ -106,6 +106,31 @@ add_dependencies(webgpu_tree_check webgpu_outputs)
 
 add_test(NAME webgpu_tree_check COMMAND webgpu_tree_check)
 
+# The ycetl path: a constexpr program that #includes webgpu_tree.hpp and
+# rebuilds the Python bindings FROM the tree using ycetl's constexpr string
+# (working memory) baked into a std::array (result memory). Its output must be
+# byte-identical to the direct emit_python path. Built only on demand (the
+# constexpr evaluation of ~150 KB is heavy), so it's EXCLUDE_FROM_ALL.
+add_executable(webgpu_emit_py EXCLUDE_FROM_ALL webgpu_emit_py.cpp)
+target_include_directories(webgpu_emit_py PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(webgpu_emit_py PRIVATE yconstexpr::yconstexpr)
+add_dependencies(webgpu_emit_py webgpu_outputs)   # needs the generated tree
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(webgpu_emit_py PRIVATE -fconstexpr-steps=2000000000)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(webgpu_emit_py PRIVATE
+        -fconstexpr-ops-limit=2000000000 -fconstexpr-loop-limit=10000000)
+endif()
+
+set(_from_tree "${CMAKE_CURRENT_BINARY_DIR}/webgpu_ctypes_from_tree.py")
+add_custom_command(
+    OUTPUT ${_from_tree}
+    COMMAND $<TARGET_FILE:webgpu_emit_py> ${_from_tree}
+    DEPENDS webgpu_emit_py
+    COMMENT "webgpu: ycetl re-emitting the bindings from the constexpr tree"
+    VERBATIM)
+add_custom_target(webgpu_from_tree DEPENDS ${_from_tree})
+
 # Python-side smoke test: imports the generated ctypes module and
 # checks well-known enum values + struct sizes against webgpu.h.
 # Drops if python3 isn't on PATH (libclang is a much harder dep, so if

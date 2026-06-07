@@ -772,101 +772,179 @@ std::string esc(const std::string &s) {
   return r;
 }
 
+// A quoted Python-ctypes text literal stored verbatim in the tree (e.g. the
+// string "WGPUStringView" or "c_void_p" the emitter prints raw into the .py).
+std::string qstr(const std::string &s) { return "\"" + esc(s) + "\""; }
+
 void emit_tree(const api_tree &tree, const std::string &path) {
   std::ofstream out(path);
+
+  // Recompute the exact orderings emit_python uses, so a constexpr consumer
+  // walking this tree can reproduce the Python bindings byte-for-byte.
+  std::unordered_map<std::string, std::size_t> record_idx;
+  for (std::size_t i = 0; i < tree.records.size(); ++i)
+    record_idx[tree.records[i].name] = i;
+
+  // Topological order by by-value struct dependencies (same DFS as emit_python).
+  std::vector<std::vector<std::size_t>> deps(tree.records.size());
+  for (std::size_t i = 0; i < tree.records.size(); ++i)
+    for (const auto &f : tree.records[i].fields)
+      if (!f.record_dep.empty())
+        if (auto it = record_idx.find(f.record_dep); it != record_idx.end())
+          deps[i].push_back(it->second);
+  std::vector<std::size_t> topo;
+  std::vector<int> mark(tree.records.size(), 0);
+  auto visit = [&](auto &self, std::size_t i) -> void {
+    if (mark[i])
+      return;
+    mark[i] = 1;
+    for (auto d : deps[i])
+      self(self, d);
+    mark[i] = 2;
+    topo.push_back(i);
+  };
+  for (std::size_t i = 0; i < tree.records.size(); ++i)
+    visit(visit, i);
+
+  // Filtered typedef aliases (same filter as emit_python).
+  py_type_map pm = build_py_map(tree);
+  std::vector<std::string> alias_lits;
+  for (const auto &t : tree.typedefs) {
+    if (pm.enum_names.count(t.name) || pm.record_names.count(t.name))
+      continue;
+    if (t.is_callback)
+      continue;
+    auto it = pm.typedef_to_ctypes.find(t.name);
+    if (it == pm.typedef_to_ctypes.end() || it->second == t.name)
+      continue;
+    alias_lits.push_back("{" + qstr(t.name) + ", " + qstr(it->second) + "}");
+  }
+
+  // Flatten everything into homogeneous pools.
+  std::vector<std::string> field_lits, record_lits;
+  for (const auto &r : tree.records) {
+    std::size_t begin = field_lits.size();
+    for (const auto &f : r.fields)
+      field_lits.push_back("{" + qstr(f.name) + ", " + qstr(f.ctypes_type) + ", "
+                           + qstr(f.type_spelling) + ", "
+                           + std::to_string(f.offset_bits / 8) + ", "
+                           + std::to_string(f.size_bytes) + "}");
+    record_lits.push_back("{" + qstr(r.name) + ", "
+                          + (r.is_opaque() ? "true" : "false") + ", "
+                          + std::to_string(begin) + ", "
+                          + std::to_string(r.fields.size()) + "}");
+  }
+
+  std::vector<std::string> enumv_lits, enum_lits;
+  for (const auto &e : tree.enums) {
+    std::size_t begin = enumv_lits.size();
+    std::unordered_set<long long> seen;
+    for (const auto &v : e.values) {
+      bool is_alias = !seen.insert(v.value).second;
+      enumv_lits.push_back("{" + qstr(v.name) + ", " + std::to_string(v.value)
+                           + "LL, " + (is_alias ? "true" : "false") + "}");
+    }
+    enum_lits.push_back("{" + qstr(e.name) + ", " + std::to_string(begin) + ", "
+                        + std::to_string(e.values.size()) + "}");
+  }
+
+  std::vector<std::string> cbarg_lits, callback_lits;
+  for (const auto &t : tree.typedefs) {
+    if (!t.is_callback)
+      continue;
+    std::size_t begin = cbarg_lits.size();
+    for (const auto &a : t.callback_args)
+      cbarg_lits.push_back(qstr(a));
+    callback_lits.push_back(
+        "{" + qstr(t.name) + ", "
+        + qstr(t.callback_ret.empty() ? "None" : t.callback_ret) + ", "
+        + std::to_string(begin) + ", "
+        + std::to_string(t.callback_args.size()) + "}");
+  }
+
+  std::vector<std::string> fnarg_lits, function_lits;
+  for (const auto &f : tree.functions) {
+    std::size_t begin = fnarg_lits.size();
+    for (const auto &a : f.arg_ctypes)
+      fnarg_lits.push_back(qstr(a));
+    function_lits.push_back(
+        "{" + qstr(f.name) + ", "
+        + qstr(f.return_ctype.empty() ? "None" : f.return_ctype) + ", "
+        + std::to_string(begin) + ", " + std::to_string(f.arg_ctypes.size())
+        + "}");
+  }
+
+  std::vector<std::string> const_lits;
+  for (const auto &c : tree.constants)
+    const_lits.push_back("{" + qstr(c.name) + ", " + qstr(c.value) + "}");
+
+  std::vector<std::string> topo_lits;
+  for (auto i : topo)
+    topo_lits.push_back(std::to_string(i));
+
+  // ----- emit -----
+  auto dump = [&](const char *type, const char *name,
+                  const std::vector<std::string> &lits) {
+    out << "inline constexpr std::array<" << type << ", " << lits.size() << "> "
+        << name << " = ";
+    if (lits.empty()) {
+      out << "{};\n\n";
+      return;
+    }
+    out << "{{\n";
+    for (const auto &l : lits)
+      out << "    " << l << ",\n";
+    out << "}};\n\n";
+  };
+
   out << "// Generated by webgpu_introspect. Do not edit by hand.\n"
          "// Source: webgpu.h\n"
          "//\n"
-         "// The whole API description is a single constexpr value tree of\n"
-         "// std::array + std::string_view + plain structs. Anything\n"
-         "// consteval / constexpr can walk it at compile time.\n"
+         "// Flattened, homogeneous, constexpr-walkable model of the API — the\n"
+         "// ycetl-shape \"result memory\": std::array of plain structs, no void*,\n"
+         "// no per-N templates. A constexpr consumer can walk all of it; see\n"
+         "// webgpu_emit_py.cpp, which rebuilds the Python bindings from it.\n"
          "#pragma once\n"
          "#include <array>\n"
+         "#include <cstddef>\n"
          "#include <cstdint>\n"
          "#include <string_view>\n\n"
          "namespace webgpu_tree {\n\n"
-         "struct field_info {\n"
-         "    std::string_view name;\n"
-         "    std::string_view type_spelling;\n"
-         "    std::int64_t offset_bits;\n"
-         "    std::int64_t size_bytes;\n"
-         "};\n\n"
-         "template <std::size_t N>\n"
-         "struct record_info {\n"
-         "    std::string_view name;\n"
-         "    std::int64_t size_bytes;\n"
-         "    std::int64_t align_bytes;\n"
-         "    std::array<field_info, N> fields;\n"
-         "};\n\n"
-         "struct enum_value {\n"
-         "    std::string_view name;\n"
-         "    long long value;\n"
-         "};\n\n"
-         "template <std::size_t N>\n"
-         "struct enum_info {\n"
-         "    std::string_view name;\n"
-         "    std::string_view underlying;\n"
-         "    std::int64_t size_bytes;\n"
-         "    std::array<enum_value, N> values;\n"
-         "};\n\n";
+         "using std::string_view;\n\n"
+         "struct field { string_view name; string_view ctype; string_view src;\n"
+         "               std::int64_t offset_bytes; std::int64_t size_bytes; };\n"
+         "struct record { string_view name; bool opaque;\n"
+         "                std::size_t field_begin; std::size_t field_count; };\n"
+         "struct enumerator { string_view name; long long value; bool is_alias; };\n"
+         "struct enumeration { string_view name;\n"
+         "                     std::size_t value_begin; std::size_t value_count; };\n"
+         "struct alias { string_view name; string_view ctype; };\n"
+         "struct callback { string_view name; string_view ret;\n"
+         "                  std::size_t arg_begin; std::size_t arg_count; };\n"
+         "struct function { string_view name; string_view ret;\n"
+         "                  std::size_t arg_begin; std::size_t arg_count; };\n"
+         "struct constant { string_view name; string_view value; };\n\n";
 
-  // Counts (so a consumer can static_assert against them).
   out << "inline constexpr std::size_t record_count   = " << tree.records.size()
-      << ";\n";
-  out << "inline constexpr std::size_t enum_count     = " << tree.enums.size()
-      << ";\n";
-  out << "inline constexpr std::size_t typedef_count  = "
-      << tree.typedefs.size() << ";\n";
-  out << "inline constexpr std::size_t function_count = "
+      << ";\n"
+      << "inline constexpr std::size_t enum_count     = " << tree.enums.size()
+      << ";\n"
+      << "inline constexpr std::size_t typedef_count  = " << tree.typedefs.size()
+      << ";\n"
+      << "inline constexpr std::size_t function_count = "
       << tree.functions.size() << ";\n\n";
 
-  // Records: one constexpr variable per record (sized template means
-  // we can't put them all in one homogeneous array, but we expose them
-  // through a name table below for runtime lookup).
-  for (std::size_t i = 0; i < tree.records.size(); ++i) {
-    const auto &r = tree.records[i];
-    out << "inline constexpr record_info<" << r.fields.size() << "> rec_" << i
-        << " = {\n"
-        << "    \"" << esc(r.name) << "\",\n"
-        << "    " << r.size_bytes << ", " << r.align_bytes << ",\n"
-        << "    {{\n";
-    for (const auto &f : r.fields) {
-      out << "        {\"" << esc(f.name) << "\", \"" << esc(f.type_spelling)
-          << "\", " << f.offset_bits << ", " << f.size_bytes << "},\n";
-    }
-    out << "    }}\n};\n";
-  }
-
-  // Same per-enum.
-  for (std::size_t i = 0; i < tree.enums.size(); ++i) {
-    const auto &e = tree.enums[i];
-    out << "inline constexpr enum_info<" << e.values.size() << "> enm_" << i
-        << " = {\n"
-        << "    \"" << esc(e.name) << "\",\n"
-        << "    \"" << esc(e.underlying) << "\",\n"
-        << "    " << e.size_bytes << ",\n"
-        << "    {{\n";
-    for (const auto &v : e.values) {
-      out << "        {\"" << esc(v.name) << "\", " << v.value << "LL},\n";
-    }
-    out << "    }}\n};\n";
-  }
-
-  // Name index — homogeneous, walkable at constexpr time, lets a
-  // consumer find a record/enum by name without instantiating every
-  // record_info<N> individually.
-  out << "\nstruct named_record { std::string_view name; const void *ptr; };\n"
-      << "inline constexpr std::array<named_record, record_count> records = "
-         "{{\n";
-  for (std::size_t i = 0; i < tree.records.size(); ++i)
-    out << "    {\"" << esc(tree.records[i].name) << "\", &rec_" << i << "},\n";
-  out << "}};\n\n";
-
-  out << "struct named_enum { std::string_view name; const void *ptr; };\n"
-      << "inline constexpr std::array<named_enum, enum_count> enums = {{\n";
-  for (std::size_t i = 0; i < tree.enums.size(); ++i)
-    out << "    {\"" << esc(tree.enums[i].name) << "\", &enm_" << i << "},\n";
-  out << "}};\n\n";
+  dump("field", "fields", field_lits);
+  dump("record", "records", record_lits);   // name order (struct-stub order)
+  dump("std::size_t", "topo", topo_lits);    // _fields_ emission order
+  dump("enumerator", "enum_values", enumv_lits);
+  dump("enumeration", "enums", enum_lits);
+  dump("alias", "aliases", alias_lits);
+  dump("string_view", "callback_args", cbarg_lits);
+  dump("callback", "callbacks", callback_lits);
+  dump("string_view", "function_args", fnarg_lits);
+  dump("function", "functions", function_lits);
+  dump("constant", "constants", const_lits);
 
   out << "} // namespace webgpu_tree\n";
 }

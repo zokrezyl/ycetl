@@ -9,10 +9,7 @@ CMAKE      ?= cmake
 # to actually compile.
 .DEFAULT_GOAL := help
 
-.PHONY: all configure build clean distclean rebuild test install help \
-        webgpu webgpu-configure webgpu-tool webgpu-gen webgpu-tree-check \
-        webgpu-test webgpu-python webgpu-show webgpu-clean \
-        webgpu-dawn webgpu-native
+.PHONY: all configure build clean distclean rebuild test install help
 
 all: build
 
@@ -40,112 +37,110 @@ install: build
 	$(CMAKE) --install $(BUILD_DIR)
 
 # ---------------------------------------------------------------------------
-# WebGPU Python bindings (examples/webgpu)
+# WebGPU bindings example (examples/webgpu) — explicit, separated build stages.
 #
-# The pipeline, stage by stage — each make target builds exactly one box:
+# Two implementations, each in its OWN build tree (build-linux/webgpu-<impl>)
+# so they never clobber each other. Every stage is a REAL FILE TARGET, chained
+# by file prerequisites — so invoking a later stage builds the earlier ones
+# first, and a stage only re-runs when its own inputs changed:
 #
-#   <impl>/include/webgpu.h     (the bundled C header; impl = dawn | native)
-#        |  libclang walk
-#        v
-#   webgpu_introspect           [webgpu-tool]   the parser/emitter executable
-#        |  run it on the header
-#        v
-#   webgpu_ctypes.py + webgpu_tree.hpp  [webgpu-gen]  the two generated artefacts
-#        |                                  \
-#        |  import + size/enum checks        \  #include + static_assert
-#        v                                    v
-#   webgpu_ctypes_check.py                webgpu_tree_check  [webgpu-tree-check]
-#        \________________ [webgpu-test] ___________________/
+#   examples/webgpu/<impl>/include/webgpu.h
+#     ─stage─ configure   → build-linux/webgpu-<impl>/CMakeCache.txt
+#     ─stage─ tool        → .../examples/webgpu/webgpu_introspect   (the emitter)
+#     ─stage─ gen         → .../webgpu_ctypes.py  +  .../webgpu_tree.hpp
+#     ─stage─ tree-check  → .../examples/webgpu/webgpu_tree_check    (C++ consumer)
+#     ─stage─ test        → ctest
 #
-# These share $(BUILD_DIR) but force -DYCETL_BUILD_WEBGPU=ON (the option is
-# OFF by default so a normal build never needs libclang). Choose the header
-# implementation with WEBGPU_IMPL=dawn|native (default dawn).
+# Targets:  webgpu-<impl>-{configure,tool,gen,tree-check,test,show,clean}
+#           webgpu-<impl>            (= tree-check: builds the whole example)
+# Each tree is trimmed to the example only (no unit_test / yce).
 # ---------------------------------------------------------------------------
 
-WEBGPU_IMPL ?= dawn
-WEBGPU_DIR  ?= $(BUILD_DIR)/examples/webgpu
-WEBGPU_PY   ?= $(WEBGPU_DIR)/webgpu_ctypes.py
-WEBGPU_HPP  ?= $(WEBGPU_DIR)/webgpu_tree.hpp
+WEBGPU_SRC := examples/webgpu
+WEBGPU_CFG := -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DYCETL_BUILD_WEBGPU=ON \
+              -DYCETL_BUILD_TESTS=OFF -DYCETL_BUILD_EXAMPLES=OFF
 
-# Stage 0 — configure with the example turned on (cheap to re-run; idempotent).
-# CMAKE_EXTRA lets the per-impl wrappers below pass extra flags (e.g. trim the
-# build to the example only).
-webgpu-configure:
-	$(CMAKE) -S . -B $(BUILD_DIR) -G "$(GENERATOR)" \
-		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) -DYCETL_BUILD_WEBGPU=ON \
-		-DWEBGPU_IMPL=$(WEBGPU_IMPL) $(CMAKE_EXTRA)
+# ===== dawn ================================================================
+DAWN     := $(BUILD_DIR)/webgpu-dawn
+DAWN_OUT := $(DAWN)/examples/webgpu
 
-# Stage 1 — build the libclang-driven parser/emitter tool only.
-webgpu-tool: webgpu-configure
-	$(CMAKE) --build $(BUILD_DIR) --parallel $(JOBS) --target webgpu_introspect
+# stage: configure
+$(DAWN)/CMakeCache.txt: $(WEBGPU_SRC)/CMakeLists.txt
+	$(CMAKE) -S . -B $(DAWN) -G "$(GENERATOR)" -DWEBGPU_IMPL=dawn $(WEBGPU_CFG)
+# stage: tool  (the libclang parser/emitter binary)
+$(DAWN_OUT)/webgpu_introspect: $(WEBGPU_SRC)/webgpu_introspect.cpp $(DAWN)/CMakeCache.txt
+	$(CMAKE) --build $(DAWN) --parallel $(JOBS) --target webgpu_introspect
+# stage: gen  (run the tool → emit the .py and .hpp)
+$(DAWN_OUT)/webgpu_tree.hpp: $(DAWN_OUT)/webgpu_introspect $(WEBGPU_SRC)/dawn/include/webgpu.h
+	$(CMAKE) --build $(DAWN) --parallel $(JOBS) --target webgpu_outputs
+# stage: tree-check  (the C++ constexpr consumer binary)
+$(DAWN_OUT)/webgpu_tree_check: $(DAWN_OUT)/webgpu_tree.hpp $(WEBGPU_SRC)/webgpu_tree_check.cpp
+	$(CMAKE) --build $(DAWN) --parallel $(JOBS) --target webgpu_tree_check
+# stage: emit  (ycetl walks the tree at constexpr → rebuilds the .py)
+$(DAWN_OUT)/webgpu_ctypes_from_tree.py: $(DAWN_OUT)/webgpu_tree.hpp $(WEBGPU_SRC)/webgpu_emit_py.cpp
+	$(CMAKE) --build $(DAWN) --parallel $(JOBS) --target webgpu_from_tree
 
-# Stage 2 — run the tool on <impl>/include/webgpu.h, emitting the .py + .hpp.
-webgpu-gen: webgpu-tool
-	$(CMAKE) --build $(BUILD_DIR) --parallel $(JOBS) --target webgpu_outputs
+.PHONY: webgpu-dawn-configure webgpu-dawn-tool webgpu-dawn-gen \
+        webgpu-dawn-tree-check webgpu-dawn-emit webgpu-dawn-verify \
+        webgpu-dawn webgpu-dawn-test webgpu-dawn-show webgpu-dawn-clean
+webgpu-dawn-configure:  $(DAWN)/CMakeCache.txt
+webgpu-dawn-tool:       $(DAWN_OUT)/webgpu_introspect
+webgpu-dawn-gen:        $(DAWN_OUT)/webgpu_tree.hpp
+webgpu-dawn-tree-check: $(DAWN_OUT)/webgpu_tree_check
+webgpu-dawn-emit:       $(DAWN_OUT)/webgpu_ctypes_from_tree.py
+webgpu-dawn:            $(DAWN_OUT)/webgpu_tree_check
+webgpu-dawn-test: $(DAWN_OUT)/webgpu_tree_check
+	ctest --test-dir $(DAWN) -R webgpu --output-on-failure
+# verify: the two paths (direct libclang vs ycetl-from-tree) are byte-identical
+webgpu-dawn-verify: $(DAWN_OUT)/webgpu_ctypes_from_tree.py
+	@cmp -s $(DAWN_OUT)/webgpu_ctypes.py $(DAWN_OUT)/webgpu_ctypes_from_tree.py \
+	  && echo "dawn: IDENTICAL — ycetl(tree) == direct(libclang)" \
+	  || { echo "dawn: DIFFER"; diff $(DAWN_OUT)/webgpu_ctypes.py $(DAWN_OUT)/webgpu_ctypes_from_tree.py | head -20; exit 1; }
+webgpu-dawn-show: $(DAWN_OUT)/webgpu_tree.hpp
+	@head -n 40 $(DAWN_OUT)/webgpu_ctypes.py
+webgpu-dawn-clean:
+	rm -f $(DAWN_OUT)/webgpu_ctypes.py $(DAWN_OUT)/webgpu_tree.hpp $(DAWN_OUT)/webgpu_ctypes_from_tree.py
 
-# Stage 3 — build the C++ consumer that walks the constexpr tree at compile time.
-webgpu-tree-check: webgpu-gen
-	$(CMAKE) --build $(BUILD_DIR) --parallel $(JOBS) --target webgpu_tree_check
+# ===== native ==============================================================
+NATIVE     := $(BUILD_DIR)/webgpu-native
+NATIVE_OUT := $(NATIVE)/examples/webgpu
 
-# Whole example: tool + generated artefacts + C++ consumer.
-webgpu: webgpu-tree-check
+# stage: configure
+$(NATIVE)/CMakeCache.txt: $(WEBGPU_SRC)/CMakeLists.txt
+	$(CMAKE) -S . -B $(NATIVE) -G "$(GENERATOR)" -DWEBGPU_IMPL=native $(WEBGPU_CFG)
+# stage: tool
+$(NATIVE_OUT)/webgpu_introspect: $(WEBGPU_SRC)/webgpu_introspect.cpp $(NATIVE)/CMakeCache.txt
+	$(CMAKE) --build $(NATIVE) --parallel $(JOBS) --target webgpu_introspect
+# stage: gen
+$(NATIVE_OUT)/webgpu_tree.hpp: $(NATIVE_OUT)/webgpu_introspect $(WEBGPU_SRC)/native/include/webgpu.h
+	$(CMAKE) --build $(NATIVE) --parallel $(JOBS) --target webgpu_outputs
+# stage: tree-check
+$(NATIVE_OUT)/webgpu_tree_check: $(NATIVE_OUT)/webgpu_tree.hpp $(WEBGPU_SRC)/webgpu_tree_check.cpp
+	$(CMAKE) --build $(NATIVE) --parallel $(JOBS) --target webgpu_tree_check
+# stage: emit  (ycetl walks the tree at constexpr → rebuilds the .py)
+$(NATIVE_OUT)/webgpu_ctypes_from_tree.py: $(NATIVE_OUT)/webgpu_tree.hpp $(WEBGPU_SRC)/webgpu_emit_py.cpp
+	$(CMAKE) --build $(NATIVE) --parallel $(JOBS) --target webgpu_from_tree
 
-# Run both smoke tests (python ctypes import + constexpr tree static_asserts).
-webgpu-test: webgpu
-	ctest --test-dir $(BUILD_DIR) -R webgpu --output-on-failure
-
-# Print where the generated Python module landed and how to import it.
-webgpu-python: webgpu-gen
-	@echo "Generated Python bindings: $(WEBGPU_PY)"
-	@echo "Try it:  PYTHONPATH=$(WEBGPU_DIR) python3 -c 'import webgpu_ctypes as w; print(w.WGPUTextureFormat.WGPUTextureFormat_RGBA8Unorm)'"
-
-# Peek at the head of the generated Python module.
-webgpu-show: webgpu-gen
-	@echo "== $(WEBGPU_PY) (first 40 lines) =="
-	@head -n 40 $(WEBGPU_PY)
-	@echo "   ... (full file at $(WEBGPU_PY))"
-
-# Remove just the generated binding artefacts (keeps the rest of the build).
-webgpu-clean:
-	rm -f $(WEBGPU_PY) $(WEBGPU_HPP)
-
-# --- Per-implementation variants (dawn / native) ---------------------------
-# Each implementation gets its OWN build tree so the two can coexist and be
-# compared without clobbering each other's generated module. The trees are
-# nested under $(BUILD_DIR) (already gitignored) and trimmed to the example
-# only (no unit_test / yce). Every stage of the generic family above is
-# available per impl, e.g.:
-#
-#   make webgpu-dawn-configure     make webgpu-native-configure
-#   make webgpu-dawn-test          make webgpu-native-test
-#   make webgpu-dawn-show          make webgpu-native-show
-#   make webgpu-dawn               make webgpu-native      (build whole example)
-#
-# Implemented by re-invoking the generic webgpu-<stage> target with the impl
-# and a dedicated build dir overridden on the command line.
-
-WEBGPU_LEAN := -DYCETL_BUILD_TESTS=OFF -DYCETL_BUILD_EXAMPLES=OFF
-
-webgpu-dawn-%:
-	@$(MAKE) --no-print-directory webgpu-$* \
-		WEBGPU_IMPL=dawn BUILD_DIR=$(BUILD_DIR)/webgpu-dawn \
-		CMAKE_EXTRA='$(WEBGPU_LEAN)'
-
-webgpu-native-%:
-	@$(MAKE) --no-print-directory webgpu-$* \
-		WEBGPU_IMPL=native BUILD_DIR=$(BUILD_DIR)/webgpu-native \
-		CMAKE_EXTRA='$(WEBGPU_LEAN)'
-
-# Plain `webgpu-dawn` / `webgpu-native` build the whole example for that impl.
-webgpu-dawn:
-	@$(MAKE) --no-print-directory webgpu \
-		WEBGPU_IMPL=dawn BUILD_DIR=$(BUILD_DIR)/webgpu-dawn \
-		CMAKE_EXTRA='$(WEBGPU_LEAN)'
-
-webgpu-native:
-	@$(MAKE) --no-print-directory webgpu \
-		WEBGPU_IMPL=native BUILD_DIR=$(BUILD_DIR)/webgpu-native \
-		CMAKE_EXTRA='$(WEBGPU_LEAN)'
+.PHONY: webgpu-native-configure webgpu-native-tool webgpu-native-gen \
+        webgpu-native-tree-check webgpu-native-emit webgpu-native-verify \
+        webgpu-native webgpu-native-test webgpu-native-show webgpu-native-clean
+webgpu-native-configure:  $(NATIVE)/CMakeCache.txt
+webgpu-native-tool:       $(NATIVE_OUT)/webgpu_introspect
+webgpu-native-gen:        $(NATIVE_OUT)/webgpu_tree.hpp
+webgpu-native-tree-check: $(NATIVE_OUT)/webgpu_tree_check
+webgpu-native-emit:       $(NATIVE_OUT)/webgpu_ctypes_from_tree.py
+webgpu-native:            $(NATIVE_OUT)/webgpu_tree_check
+webgpu-native-test: $(NATIVE_OUT)/webgpu_tree_check
+	ctest --test-dir $(NATIVE) -R webgpu --output-on-failure
+# verify: the two paths (direct libclang vs ycetl-from-tree) are byte-identical
+webgpu-native-verify: $(NATIVE_OUT)/webgpu_ctypes_from_tree.py
+	@cmp -s $(NATIVE_OUT)/webgpu_ctypes.py $(NATIVE_OUT)/webgpu_ctypes_from_tree.py \
+	  && echo "native: IDENTICAL — ycetl(tree) == direct(libclang)" \
+	  || { echo "native: DIFFER"; diff $(NATIVE_OUT)/webgpu_ctypes.py $(NATIVE_OUT)/webgpu_ctypes_from_tree.py | head -20; exit 1; }
+webgpu-native-show: $(NATIVE_OUT)/webgpu_tree.hpp
+	@head -n 40 $(NATIVE_OUT)/webgpu_ctypes.py
+webgpu-native-clean:
+	rm -f $(NATIVE_OUT)/webgpu_ctypes.py $(NATIVE_OUT)/webgpu_tree.hpp $(NATIVE_OUT)/webgpu_ctypes_from_tree.py
 
 help:
 	@echo "Targets:"
@@ -158,34 +153,25 @@ help:
 	@echo "  test       - run ctest in $(BUILD_DIR)"
 	@echo "  install    - cmake --install $(BUILD_DIR)"
 	@echo ""
-	@echo "WebGPU Python bindings (examples/webgpu) — two independent targets,"
-	@echo "each parses its own header into its own build tree:"
+	@echo "WebGPU example (examples/webgpu) — separated build stages, one target"
+	@echo "each, chained by file deps (a later stage builds the earlier ones first)."
+	@echo "Two impls, each in its own tree build-linux/webgpu-<impl>:"
 	@echo ""
-	@echo "  DAWN   header examples/webgpu/dawn/include/webgpu.h   tree $(BUILD_DIR)/webgpu-dawn"
-	@echo "    webgpu-dawn-configure   - cmake (-DYCETL_BUILD_WEBGPU=ON, WEBGPU_IMPL=dawn)"
-	@echo "    webgpu-dawn-tool        - build the libclang parser (webgpu_introspect)"
-	@echo "    webgpu-dawn-gen         - emit webgpu_ctypes.py + webgpu_tree.hpp"
-	@echo "    webgpu-dawn-tree-check  - build the C++ constexpr-tree consumer"
-	@echo "    webgpu-dawn             - build the whole example"
-	@echo "    webgpu-dawn-test        - run both smoke tests (python + constexpr)"
-	@echo "    webgpu-dawn-python      - print the generated module path + import hint"
-	@echo "    webgpu-dawn-show        - print the head of the generated module"
-	@echo "    webgpu-dawn-clean       - remove the generated .py/.hpp"
+	@echo "  stage      target                    emits"
+	@echo "  configure  webgpu-<impl>-configure    CMakeCache.txt"
+	@echo "  tool       webgpu-<impl>-tool         webgpu_introspect (the emitter)"
+	@echo "  gen        webgpu-<impl>-gen          webgpu_ctypes.py + webgpu_tree.hpp"
+	@echo "  tree-check webgpu-<impl>-tree-check   webgpu_tree_check (C++ consumer)"
+	@echo "  emit       webgpu-<impl>-emit         webgpu_ctypes_from_tree.py (ycetl@constexpr)"
+	@echo "  verify     webgpu-<impl>-verify       diff: ycetl(tree) == direct(libclang)"
+	@echo "  test       webgpu-<impl>-test         runs ctest"
+	@echo "  (whole)    webgpu-<impl>              = tree-check"
+	@echo "  show/clean webgpu-<impl>-{show,clean} peek at / remove generated files"
 	@echo ""
-	@echo "  NATIVE header examples/webgpu/native/include/webgpu.h tree $(BUILD_DIR)/webgpu-native"
-	@echo "    webgpu-native-configure - cmake (-DYCETL_BUILD_WEBGPU=ON, WEBGPU_IMPL=native)"
-	@echo "    webgpu-native-tool      - build the libclang parser (webgpu_introspect)"
-	@echo "    webgpu-native-gen       - emit webgpu_ctypes.py + webgpu_tree.hpp"
-	@echo "    webgpu-native-tree-check- build the C++ constexpr-tree consumer"
-	@echo "    webgpu-native           - build the whole example"
-	@echo "    webgpu-native-test      - run both smoke tests (python + constexpr)"
-	@echo "    webgpu-native-python    - print the generated module path + import hint"
-	@echo "    webgpu-native-show      - print the head of the generated module"
-	@echo "    webgpu-native-clean     - remove the generated .py/.hpp"
+	@echo "  <impl> = dawn | native.  e.g.  make webgpu-dawn-gen   make webgpu-native-test"
 	@echo ""
 	@echo "Variables (override on cmd line):"
 	@echo "  BUILD_DIR   = $(BUILD_DIR)"
 	@echo "  BUILD_TYPE  = $(BUILD_TYPE)"
 	@echo "  GENERATOR   = $(GENERATOR)"
 	@echo "  JOBS        = $(JOBS)"
-	@echo "  WEBGPU_IMPL = $(WEBGPU_IMPL)"
