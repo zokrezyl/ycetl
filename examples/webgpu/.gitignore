@@ -1,0 +1,18 @@
+# Python caches / bytecode
+__pycache__/
+*.py[cod]
+
+# uv / virtualenv scaffolding
+.venv/
+.python-version
+uv.lock
+
+# Generated Python bindings (produced into the build tree, never the source
+# tree — but ignore here too in case anyone runs an emitter in place)
+webgpu_ctypes.py
+webgpu_ctypes_from_tree.py
+webgpu_tree.hpp
+
+# Downloaded / built native artifacts and demo output
+*/lib/*.so
+dawn/app/*.png
